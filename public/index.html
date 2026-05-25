@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dahua NVR Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video-js.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-contrib-hls/5.15.0/videojs-contrib-hls.min.js"
+    onerror="loadHlsFallback()"></script>
+
+  <style>
+    /* ─── VARIABLES ──────────────────────────────────────────── */
+    :root {
+      --bg0:      #080b10;
+      --bg1:      #0d1117;
+      --bg2:      #141a24;
+      --bg3:      #1c2535;
+      --border:   #1e2d42;
+      --accent:   #00c2ff;
+      --accent2:  #0088bb;
+      --warn:     #ff6b35;
+      --ok:       #22c55e;
+      --text0:    #e8f0ff;
+      --text1:    #8fa3be;
+      --text2:    #4a5c74;
+      --mono:     'Share Tech Mono', monospace;
+      --sans:     'Barlow', sans-serif;
+      --cond:     'Barlow Condensed', sans-serif;
+      --radius:   4px;
+    }
+
+    /* ─── RESET ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg0);
+      color: var(--text0);
+      height: 100%;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    /* ─── SCANLINES EFFECT ───────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,.08) 2px,
+        rgba(0,0,0,.08) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ─── LAYOUT ─────────────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      grid-template-columns: 320px 1fr;
+      height: 100vh;
+      grid-template-areas:
+        "header  header"
+        "sidebar main";
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────────── */
+    header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 20px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 10;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: var(--accent);
+      clip-path: polygon(0 0, 80% 0, 100% 20%, 100% 100%, 20% 100%, 0 80%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 16px; height: 16px; fill: #000; }
+    .logo-text {
+      font-family: var(--cond);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--text0);
+      text-transform: uppercase;
+    }
+    .logo-text span { color: var(--accent); }
+
+    .header-sep {
+      width: 1px; height: 24px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .nvr-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text2);
+    }
+    .nvr-status .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text2);
+      animation: pulse 2s infinite;
+    }
+    .nvr-status.online .dot { background: var(--ok); }
+    .nvr-status.online { color: var(--text1); }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    .header-time {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text2);
+    }
+    .header-time .ts { color: var(--text1); }
+
+    /* ─── SIDEBAR ─────────────────────────────────────────────── */
+    .sidebar {
+      grid-area: sidebar;
+      background: var(--bg1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-section:last-child { border-bottom: none; }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    /* ─── FORM CONTROLS ──────────────────────────────────────── */
+    .field { margin-bottom: 10px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 5px;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text0);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: var(--radius);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(0,194,255,.1);
+    }
+    .field input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.5) sepia(1) saturate(3) hue-rotate(170deg);
+      cursor: pointer;
+    }
+    .field select option { background: var(--bg2); }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ─── BUTTONS ────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-family: var(--cond);
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      width: 100%;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #33d0ff;
+      box-shadow: 0 0 16px rgba(0,194,255,.4);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text1);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-warn {
+      background: transparent;
+      color: var(--warn);
+      border: 1px solid rgba(255,107,53,.3);
+    }
+    .btn-warn:hover:not(:disabled) {
+      background: rgba(255,107,53,.1);
+    }
+
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn-icon {
+      padding: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text1);
+    }
+    .btn-icon:hover { color: var(--accent); border-color: var(--accent); }
+    .btn-icon svg { width: 14px; height: 14px; display: block; }
+
+    .search-btn-row { display: flex; gap: 8px; margin-top: 4px; }
+
+    /* ─── RESULTS LIST ───────────────────────────────────────── */
+    .results-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .results-list::-webkit-scrollbar { width: 4px; }
+    .results-list::-webkit-scrollbar-track { background: transparent; }
+    .results-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .results-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text2);
+      font-size: 12px;
+      gap: 8px;
+      text-align: center;
+      padding: 20px;
+    }
+    .results-empty svg { width: 32px; height: 32px; opacity: .3; }
+    .results-count {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text2);
+      text-align: center;
+      padding: 6px;
+    }
+    .results-count span { color: var(--accent); }
+
+    .file-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .file-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--border);
+      transition: background .15s;
+    }
+    .file-card:hover {
+      border-color: var(--accent);
+      background: var(--bg3);
+    }
+    .file-card:hover::before { background: var(--accent); }
+    .file-card.active {
+      border-color: var(--accent);
+      background: rgba(0,194,255,.05);
+    }
+    .file-card.active::before { background: var(--accent); }
+
+    .file-card-time {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text0);
+      margin-bottom: 4px;
+    }
+    .file-card-time span { color: var(--accent); }
+
+    .file-card-meta {
+      display: flex;
+      gap: 10px;
+      font-size: 10px;
+      color: var(--text2);
+    }
+    .file-card-meta .badge {
+      background: var(--bg0);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .file-card-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    /* ─── MAIN AREA ───────────────────────────────────────────── */
+    main {
+      grid-area: main;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg0);
+    }
+
+    /* ─── PLAYER WRAPPER ─────────────────────────────────────── */
+    .player-wrapper {
+      flex: 1;
+      position: relative;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .player-idle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text2);
+      text-align: center;
+      padding: 40px;
+    }
+    .player-idle .big-icon {
+      width: 80px; height: 80px;
+      opacity: .12;
+    }
+    .player-idle h2 {
+      font-family: var(--cond);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text2);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .player-idle p {
+      font-size: 13px;
+      max-width: 300px;
+      line-height: 1.6;
+    }
+
+    /* Video.js overrides */
+    #main-player {
+      width: 100%;
+      height: 100%;
+    }
+    .video-js {
+      width: 100% !important;
+      height: 100% !important;
+      background: #000;
+    }
+    .video-js .vjs-big-play-button {
+      border: 2px solid var(--accent);
+      background: rgba(0,194,255,.15);
+      border-radius: 50%;
+      width: 60px; height: 60px;
+      line-height: 56px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      margin: 0;
+    }
+    .video-js:hover .vjs-big-play-button,
+    .video-js .vjs-big-play-button:focus {
+      background: rgba(0,194,255,.3);
+    }
+    .video-js .vjs-control-bar {
+      background: linear-gradient(transparent, rgba(0,0,0,.8));
+      height: 44px;
+    }
+    .video-js .vjs-progress-control { flex: 1; }
+    .video-js .vjs-play-progress { background: var(--accent); }
+    .video-js .vjs-volume-level { background: var(--accent); }
+
+    /* ─── PLAYER TOOLBAR ─────────────────────────────────────── */
+    .player-toolbar {
+      background: var(--bg1);
+      border-top: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .player-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .player-info-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .player-info-sub {
+      font-size: 10px;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    .toolbar-actions { display: flex; gap: 8px; align-items: center; }
+
+    /* ─── LOADING OVERLAY ────────────────────────────────────── */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8,11,16,.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+    }
+    .loading-overlay.hidden { display: none; }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text1);
+    }
+    .loading-sub {
+      font-size: 11px;
+      color: var(--text2);
+    }
+
+    /* ─── SHARE MODAL ────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+    .modal-backdrop.hidden { display: none; }
+
+    .modal {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 24px;
+      width: 480px;
+      max-width: 95vw;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .modal-title {
+      font-family: var(--cond);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text0);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text2);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text0); }
+
+    .share-url-box {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .share-url-box input {
+      flex: 1;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      outline: none;
+    }
+
+    .share-info {
+      font-size: 11px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+    .share-info strong { color: var(--text1); }
+
+    /* ─── TOAST ──────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideIn .2s ease;
+      max-width: 320px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    }
+    .toast.ok    { border-left: 3px solid var(--ok); }
+    .toast.error { border-left: 3px solid #ff4444; }
+    .toast.info  { border-left: 3px solid var(--accent); }
+    @keyframes slideIn {
+      from { transform: translateX(20px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* ─── LOADING SEARCH ─────────────────────────────────────── */
+    .results-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      gap: 10px;
+      color: var(--text2);
+      font-size: 12px;
+    }
+    .results-loading .spinner {
+      width: 20px; height: 20px;
+      border-width: 2px;
+    }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: 52px auto 1fr auto;
+        grid-template-areas:
+          "header"
+          "sidebar"
+          "main"
+          "main";
+        overflow-y: auto;
+      }
+      body { overflow: auto; }
+      .player-wrapper { min-height: 250px; }
+    }
+
+    /* ─── MISC ───────────────────────────────────────────────── */
+    .sep { width: 100%; height: 1px; background: var(--border); }
+    hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+    .flex { display: flex; align-items: center; gap: 8px; }
+    .ml-auto { margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="#000" stroke-width="2"/>
+          <circle cx="8" cy="8" r="2"/>
+        </svg>
+      </div>
+      <span class="logo-text">NVR <span>VIEWER</span></span>
+    </div>
+    <div class="header-sep"></div>
+    <div class="nvr-status" id="nvrStatus">
+      <div class="dot"></div>
+      <span id="nvrStatusText">Łączenie...</span>
+    </div>
+    <div class="header-time ml-auto">
+      <span class="ts" id="clockDisplay">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar">
+    <!-- Wyszukiwanie -->
+    <div class="sidebar-section">
+      <div class="section-label">▶ Wyszukaj nagranie</div>
+
+      <div class="field">
+        <label>Kanał wideo</label>
+        <select id="channelSelect">
+          <!-- wypełniane dynamicznie -->
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Czas od</label>
+        <input type="datetime-local" id="startTime" step="1">
+      </div>
+      <div class="field">
+        <label>Czas do</label>
+        <input type="datetime-local" id="endTime" step="1">
+      </div>
+
+      <div class="search-btn-row">
+        <button class="btn btn-primary" onclick="searchRecordings()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M6.5 12a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11zm4.89-1.44 3.05 3.06-.71.71-3.06-3.05a7 7 0 1 1 .72-.72z"/>
+          </svg>
+          Szukaj
+        </button>
+        <button class="btn btn-ghost btn-icon" onclick="resetSearch()" title="Wyczyść">
+          <svg viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.5 9.1L10.1 11.5 8 9.4l-2.1 2.1-1.4-1.4L6.6 8 4.5 5.9l1.4-1.4L8 6.6l2.1-2.1 1.4 1.4L9.4 8l2.1 2.1z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Wyniki -->
+    <div id="resultsList" class="results-list">
+      <div class="results-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <path d="M7 9h10M7 12h7"/>
+          <circle cx="17" cy="17" r="3"/>
+        </svg>
+        <div>Wybierz kanał i zakres czasu,<br>następnie kliknij <strong>Szukaj</strong></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main>
+    <div class="player-wrapper">
+      <!-- Idle state -->
+      <div class="player-idle" id="playerIdle">
+        <svg class="big-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M10 8l6 4-6 4V8z"/>
+        </svg>
+        <h2>Wybierz nagranie</h2>
+        <p>Wyszukaj nagrania po lewej stronie i kliknij plik, aby rozpocząć odtwarzanie.</p>
+      </div>
+
+      <!-- Video.js player (ukryty do czasu uruchomienia) -->
+      <video id="main-player" class="video-js vjs-default-skin" controls playsinline style="display:none">
+        <p class="vjs-no-js">Do odtwarzania wideo wymagana jest obsługa JavaScript.</p>
+      </video>
+
+      <!-- Loading overlay -->
+      <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Ładowanie strumienia...</div>
+        <div class="loading-sub" id="loadingSub">Proszę czekać, FFmpeg przetwarza nagranie</div>
+      </div>
+    </div>
+
+    <!-- Player toolbar -->
+    <div class="player-toolbar" id="playerToolbar" style="display:none">
+      <div class="player-info">
+        <div class="player-info-title" id="playerTitle">—</div>
+        <div class="player-info-sub" id="playerSub">—</div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="downloadCurrent()" title="Pobierz plik">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1v8.59l2.3-2.3 1.4 1.42L8 12.41 4.3 8.71l1.4-1.42L8 9.59V1h2zm-6 12h12v2H2v-2z"/>
+          </svg>
+          Pobierz
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openShareModal()" title="Udostępnij link">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M12 9a3 3 0 0 0-2.4 1.2L6.4 8.4A3 3 0 0 0 6.4 7.6l3.2-1.8A3 3 0 1 0 9 4a3 3 0 0 0 .4 1.4L6.2 7.2A3 3 0 1 0 4 11a3 3 0 0 0 1.8-.6l3.4 1.9A3 3 0 1 0 12 9z"/>
+          </svg>
+          Udostępnij
+        </button>
+        <button class="btn btn-warn btn-sm" onclick="stopStream()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 2h5v12H2zm7 0h5v12H9z"/>
+          </svg>
+          Stop
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══ SHARE MODAL ═══ -->
+<div class="modal-backdrop hidden" id="shareModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Udostępnij nagranie</span>
+      <button class="modal-close" onclick="closeShareModal()">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Czas ważności linku</label>
+      <select id="shareTtl">
+        <option value="1">1 godzina</option>
+        <option value="24">24 godziny</option>
+        <option value="72" selected>72 godziny (3 dni)</option>
+        <option value="168">7 dni</option>
+        <option value="720">30 dni</option>
+      </select>
+    </div>
+
+    <div class="share-url-box" id="shareUrlBox" style="display:none">
+      <input type="text" id="shareUrlInput" readonly>
+      <button class="btn btn-ghost btn-sm" onclick="copyShareUrl()">Kopiuj</button>
+    </div>
+
+    <div class="share-info" id="shareInfo" style="margin-bottom:12px">
+      Wygeneruj link, który klient może otworzyć w przeglądarce.<br>
+      Link będzie aktywny przez wybrany czas.
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="closeShareModal()">Anuluj</button>
+      <button class="btn btn-primary btn-sm" onclick="generateShareLink()">
+        Generuj link
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   DAHUA NVR VIEWER — Frontend JS
+══════════════════════════════════════════════════════════════ */
+
+// ─── STATE ────────────────────────────────────────────────────
+let vjsPlayer    = null;
+let currentToken = null;
+let currentFile  = null;
+let currentChannel = 1;
+let searchResults = [];
+
+// ─── INIT ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  initClock();
+  initDefaultTimes();
+  checkNvr();
+  await populateChannels();
+  checkUrlParams();
+});
+
+function initClock() {
+  setInterval(() => {
+    document.getElementById('clockDisplay').textContent =
+      new Date().toLocaleTimeString('pl-PL', { hour12: false });
+  }, 1000);
+}
+
+function initDefaultTimes() {
+  const now   = new Date();
+  const start = new Date(now.getTime() - 60 * 60 * 1000); // -1h
+  document.getElementById('endTime').value   = toDatetimeLocal(now);
+  document.getElementById('startTime').value = toDatetimeLocal(start);
+}
+
+function toDatetimeLocal(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function toDahuaTime(localString) {
+  // "2025-01-15T08:30:00" → "2025-01-15 08:30:00"
+  return localString.replace('T', ' ');
+}
+
+// ─── NVR STATUS ───────────────────────────────────────────────
+async function checkNvr() {
+  try {
+    const r = await fetch('/api/nvr/info');
+    const data = await r.json();
+    const el = document.getElementById('nvrStatus');
+    const txt = document.getElementById('nvrStatusText');
+    if (data.success) {
+      el.className = 'nvr-status online';
+      const model = data.info['deviceType'] || data.info['model'] || 'NVR';
+      txt.textContent = `Online · ${model}`;
+    } else {
+      throw new Error();
+    }
+  } catch (_) {
+    document.getElementById('nvrStatus').className = 'nvr-status';
+    document.getElementById('nvrStatusText').textContent = 'Brak połączenia z NVR';
+  }
+}
+
+// ─── POPULATE CHANNELS ────────────────────────────────────────
+async function populateChannels() {
+  try {
+    const r = await fetch('/api/nvr/channels');
+    const data = await r.json();
+    const count = data.count || 16;
+    const sel = document.getElementById('channelSelect');
+    sel.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Kanał ${i}`;
+      sel.appendChild(opt);
+    }
+  } catch (_) {
+    // fallback
+    const sel = document.getElementById('channelSelect');
+    sel.innerHTML = '';
+    for (let i = 1; i <= 16; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Kanał ${i}`;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+// ─── URL PARAMS (dla share linków) ───────────────────────────
+function checkUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('ch'))    document.getElementById('channelSelect').value = p.get('ch');
+  if (p.get('start')) document.getElementById('startTime').value     = p.get('start').replace(' ', 'T');
+  if (p.get('end'))   document.getElementById('endTime').value       = p.get('end').replace(' ', 'T');
+  
+  if (p.get('autoplay') === '1' && p.get('start') && p.get('end')) {
+    setTimeout(() => searchRecordings(), 500);
+  }
+}
+
+// ─── SEARCH ───────────────────────────────────────────────────
+async function searchRecordings() {
+  const channel   = parseInt(document.getElementById('channelSelect').value);
+  const startRaw  = document.getElementById('startTime').value;
+  const endRaw    = document.getElementById('endTime').value;
+
+  if (!startRaw || !endRaw) {
+    return toast('Wypełnij zakres czasu', 'error');
+  }
+  if (new Date(startRaw) >= new Date(endRaw)) {
+    return toast('Czas początku musi być wcześniej niż czas końca', 'error');
+  }
+
+  currentChannel = channel;
+  const startTime = toDahuaTime(startRaw);
+  const endTime   = toDahuaTime(endRaw);
+
+  const listEl = document.getElementById('resultsList');
+  listEl.innerHTML = `
+    <div class="results-loading">
+      <div class="spinner"></div>
+      <span>Wyszukiwanie...</span>
+    </div>`;
+
+  try {
+    const r = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, startTime, endTime })
+    });
+    const data = await r.json();
+
+    if (!data.success) throw new Error(data.error || 'Błąd wyszukiwania');
+
+    searchResults = data.files || [];
+    renderResults(data.found, data.files);
+
+  } catch (err) {
+    listEl.innerHTML = `
+      <div class="results-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#ff4444;opacity:0.5">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v4M12 16h.01"/>
+        </svg>
+        <div style="color:#ff4444">${escHtml(err.message)}</div>
+      </div>`;
+  }
+}
+
+function renderResults(found, files) {
+  const listEl = document.getElementById('resultsList');
+  
+  if (!found || !files.length) {
+    listEl.innerHTML = `
+      <div class="results-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <div>Brak nagrań w podanym<br>przedziale czasowym</div>
+      </div>`;
+    return;
+  }
+
+  let html = `<div class="results-count">Znaleziono <span>${found}</span> pliku/plików</div>`;
+  
+  files.forEach((f, idx) => {
+    const dur = f.duration ? ` · ${formatDuration(f.duration)}` : '';
+    const size = f.length  ? ` · ${formatBytes(f.length)}` : '';
+    const eventsHtml = f.events.slice(0,2).map(e => 
+      `<span class="badge">${translateEvent(e)}</span>`
+    ).join('');
+
+    html += `
+      <div class="file-card" id="card-${idx}" onclick="selectFile(${idx})">
+        <div class="file-card-time">
+          <span>${formatTime(f.startTime)}</span> → ${formatTime(f.endTime)}
+        </div>
+        <div class="file-card-meta">
+          <span class="badge">${f.type.toUpperCase()}</span>
+          ${eventsHtml}
+          <span>${dur}${size}</span>
+        </div>
+        <div class="file-card-actions" onclick="event.stopPropagation()">
+          <button class="btn btn-ghost btn-sm" onclick="playFile(${idx})">
+            ▶ Odtwórz
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadFile(${idx})">
+            ↓ Pobierz
+          </button>
+        </div>
+      </div>`;
+  });
+
+  listEl.innerHTML = html;
+}
+
+// ─── PLAY FILE ────────────────────────────────────────────────
+async function selectFile(idx) {
+  // Highlight
+  document.querySelectorAll('.file-card').forEach(c => c.classList.remove('active'));
+  document.getElementById(`card-${idx}`)?.classList.add('active');
+  await playFile(idx);
+}
+
+async function playFile(idx) {
+  const file = searchResults[idx];
+  if (!file) return;
+
+  // Zatrzymaj poprzedni stream
+  if (currentToken) await stopStream(true);
+
+  currentFile = file;
+  showLoading(true, 'Uruchamianie strumienia...', 'FFmpeg konwertuje RTSP → HLS, czekaj ~10s');
+
+  try {
+    const body = {
+      channel:   currentChannel,
+      startTime: file.startTime,
+      endTime:   file.endTime
+    };
+    if (file.filePath) body.filePath = file.filePath;
+
+    const r = await fetch('/api/stream/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+
+    if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
+
+    currentToken = data.token;
+    showPlayer(data.streamUrl, file);
+
+  } catch (err) {
+    showLoading(false);
+    toast(err.message, 'error');
+  }
+}
+
+function showPlayer(streamUrl, file) {
+  document.getElementById('playerIdle').style.display = 'none';
+
+  const videoEl = document.getElementById('main-player');
+  videoEl.style.display = 'block';
+
+  // Inicjalizuj lub zaktualizuj Video.js
+  if (vjsPlayer && !vjsPlayer.isDisposed()) {
+    vjsPlayer.src({ type: 'application/x-mpegURL', src: streamUrl });
+  } else {
+    vjsPlayer = videojs('main-player', {
+      controls:    true,
+      autoplay:    true,
+      preload:     'auto',
+      fluid:       false,
+      playbackRates: [0.5, 1, 1.5, 2],
+      html5: {
+        hls: { overrideNative: true },
+        nativeVideoTracks: false,
+        nativeAudioTracks: false
+      }
+    });
+    vjsPlayer.src({ type: 'application/x-mpegURL', src: streamUrl });
+  }
+
+  vjsPlayer.play().catch(() => {});
+
+  vjsPlayer.one('playing', () => {
+    showLoading(false);
+  });
+  vjsPlayer.on('error', () => {
+    showLoading(false);
+    toast('Błąd odtwarzania strumienia wideo', 'error');
+  });
+
+  // Toolbar
+  const toolbar = document.getElementById('playerToolbar');
+  toolbar.style.display = 'flex';
+  document.getElementById('playerTitle').textContent =
+    `Kanał ${currentChannel}  ·  ${formatTime(file.startTime)} → ${formatTime(file.endTime)}`;
+  document.getElementById('playerSub').textContent =
+    file.filePath ? file.filePath.split('/').pop() : `${file.type.toUpperCase()} · HLS stream`;
+
+  // Po 12s jeśli nadal loading
+  setTimeout(() => showLoading(false), 15000);
+}
+
+async function stopStream(silent = false) {
+  if (!currentToken) return;
+
+  if (vjsPlayer && !vjsPlayer.isDisposed()) {
+    vjsPlayer.pause();
+    vjsPlayer.reset();
+  }
+
+  try {
+    await fetch('/api/stream/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: currentToken })
+    });
+  } catch (_) {}
+
+  currentToken = null;
+  currentFile  = null;
+
+  document.getElementById('main-player').style.display = 'none';
+  document.getElementById('playerIdle').style.display  = 'flex';
+  document.getElementById('playerToolbar').style.display = 'none';
+  showLoading(false);
+
+  document.querySelectorAll('.file-card').forEach(c => c.classList.remove('active'));
+
+  if (!silent) toast('Strumień zatrzymany', 'info');
+}
+
+// ─── DOWNLOAD ─────────────────────────────────────────────────
+function downloadFile(idx) {
+  const file = searchResults[idx];
+  if (!file) return;
+
+  const params = new URLSearchParams({
+    channel:   currentChannel,
+    startTime: file.startTime,
+    endTime:   file.endTime
+  });
+  if (file.filePath) params.set('filePath', file.filePath);
+
+  toast('Pobieranie rozpoczęte...', 'info');
+  window.open(`/api/download?${params.toString()}`, '_blank');
+}
+
+function downloadCurrent() {
+  if (!currentFile) return;
+  const idx = searchResults.indexOf(currentFile);
+  if (idx >= 0) downloadFile(idx);
+}
+
+// ─── SHARE MODAL ──────────────────────────────────────────────
+function openShareModal() {
+  if (!currentFile) return toast('Najpierw wybierz nagranie', 'error');
+  document.getElementById('shareModal').classList.remove('hidden');
+  document.getElementById('shareUrlBox').style.display = 'none';
+  document.getElementById('shareInfo').innerHTML =
+    'Wygeneruj link, który klient może otworzyć w przeglądarce.<br>Link będzie aktywny przez wybrany czas.';
+}
+function closeShareModal() {
+  document.getElementById('shareModal').classList.add('hidden');
+}
+
+async function generateShareLink() {
+  if (!currentFile) return;
+  const ttlHours = parseInt(document.getElementById('shareTtl').value);
+
+  try {
+    const r = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel:   currentChannel,
+        startTime: currentFile.startTime,
+        endTime:   currentFile.endTime,
+        filePath:  currentFile.filePath || null,
+        ttlHours
+      })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error);
+
+    document.getElementById('shareUrlInput').value = data.url;
+    document.getElementById('shareUrlBox').style.display = 'flex';
+    
+    const exp = new Date(data.expiresAt).toLocaleString('pl-PL');
+    document.getElementById('shareInfo').innerHTML =
+      `<strong>Link ważny do:</strong> ${exp}<br>
+       Klient może otworzyć link bez logowania się do systemu.`;
+
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+function copyShareUrl() {
+  const val = document.getElementById('shareUrlInput').value;
+  navigator.clipboard.writeText(val).then(() => {
+    toast('Link skopiowany do schowka', 'ok');
+    closeShareModal();
+  }).catch(() => {
+    document.getElementById('shareUrlInput').select();
+  });
+}
+
+// ─── RESET SEARCH ─────────────────────────────────────────────
+function resetSearch() {
+  initDefaultTimes();
+  searchResults = [];
+  document.getElementById('resultsList').innerHTML = `
+    <div class="results-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="20" height="20" rx="2"/>
+        <path d="M7 9h10M7 12h7"/>
+      </svg>
+      <div>Wybierz kanał i zakres czasu,<br>następnie kliknij <strong>Szukaj</strong></div>
+    </div>`;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────
+function showLoading(show, text = '', sub = '') {
+  const el = document.getElementById('loadingOverlay');
+  if (show) {
+    el.classList.remove('hidden');
+    document.getElementById('loadingText').textContent = text || 'Ładowanie...';
+    document.getElementById('loadingSub').textContent  = sub || '';
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+function formatTime(str) {
+  if (!str) return '—';
+  return str.replace(/(\d{4})-(\d{2})-(\d{2}) /, '$3.$2.$1 ');
+}
+
+function formatDuration(secs) {
+  if (!secs) return '';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024*1024) return `${(bytes/1024).toFixed(0)} KB`;
+  return `${(bytes/1024/1024).toFixed(1)} MB`;
+}
+
+function translateEvent(ev) {
+  const map = {
+    'VideoMotion': 'Ruch',
+    'AlarmLocal': 'Alarm',
+    'VideoLoss': 'Utrata',
+    'VideoBlind': 'Blind',
+    'Timing': 'Ciągłe'
+  };
+  return map[ev] || ev;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+
+  const icons = {
+    ok: '✓', error: '✕', info: 'ℹ'
+  };
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${escHtml(msg)}</span>`;
+  container.appendChild(el);
+
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .3s';
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+function loadHlsFallback() {
+  // Załaduj hls.js jako fallback
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.14/hls.min.js';
+  document.head.appendChild(script);
+}
+</script>
+</body>
+</html>
