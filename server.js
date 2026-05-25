@@ -140,8 +140,8 @@ app.post('/api/search', async (req, res) => {
       `action=findFile`,
       `object=${objectId}`,
       `condition.Channel=${channel}`,
-      `condition.StartTime=${encodeURIComponent(startTime)}`,
-      `condition.EndTime=${encodeURIComponent(endTime)}`,
+      `condition.StartTime=${startTime.replace(/ /g, '%20')}`,
+      `condition.EndTime=${endTime.replace(/ /g, '%20')}`,
       typeParams
     ].join('&');
 
@@ -149,7 +149,7 @@ app.post('/api/search', async (req, res) => {
 
     // 3. Pobierz wyniki (max 200)
     const findResp = await dApi.get(
-      `/cgi-bin/mediaFileFind.cgi?action=findNextFile&object=${objectId}&count=200`
+      `/cgi-bin/mediaFileFind.cgi?action=findNextFile&object=${objectId}&count=100`
     );
 
     const parsed = parseMediaFiles(findResp.data);
