@@ -57,11 +57,50 @@ if (!fs.existsSync(CFG.hlsDir)) fs.mkdirSync(CFG.hlsDir, { recursive: true });
 // Axios instance do Dahua (Digest Auth)
 const dApi = axios.create({
   baseURL: `http://${CFG.nvrHost}:${CFG.nvrPort}`,
-  auth:    { username: CFG.nvrUser, password: CFG.nvrPass },
   timeout: 15000,
-  // Dahua zwraca text/plain dla wielu endpointów
   transformResponse: [(data) => data]
 });
+
+// Digest Auth interceptor (RFC 7616 MD5) — axios auth: obsługuje tylko Basic Auth
+(function addDigestAuth(inst, user, pass) {
+  inst.interceptors.response.use(null, async (error) => {
+    const cfg = error.config;
+    if (error.response?.status !== 401 || cfg._digestRetry) return Promise.reject(error);
+
+    const wwwAuth = error.response.headers['www-authenticate'] || '';
+    if (!/digest/i.test(wwwAuth)) return Promise.reject(error);
+
+    const p      = (k) => wwwAuth.match(new RegExp(`${k}="([^"]+)"`))?.[1] || '';
+    const realm  = p('realm');
+    const nonce  = p('nonce');
+    const opaque = p('opaque');
+    const qop    = wwwAuth.match(/qop="?([^",\s]+)/)?.[1] || '';
+
+    const ha1    = crypto.createHash('md5').update(`${user}:${realm}:${pass}`).digest('hex');
+    const absUrl = cfg.url?.startsWith('http') ? cfg.url : (cfg.baseURL || '') + (cfg.url || '');
+    const parsed = new URL(absUrl);
+    const uri    = parsed.pathname + parsed.search;
+    const ha2    = crypto.createHash('md5').update(`${(cfg.method || 'GET').toUpperCase()}:${uri}`).digest('hex');
+
+    const nc     = '00000001';
+    const cnonce = crypto.randomBytes(4).toString('hex');
+    const resp   = qop
+      ? crypto.createHash('md5').update(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`).digest('hex')
+      : crypto.createHash('md5').update(`${ha1}:${nonce}:${ha2}`).digest('hex');
+
+    const authParts = [
+      `Digest username="${user}"`, `realm="${realm}"`, `nonce="${nonce}"`,
+      `uri="${uri}"`, `algorithm=MD5`,
+      ...(qop    ? [`qop=${qop}`, `nc=${nc}`, `cnonce="${cnonce}"`] : []),
+      `response="${resp}"`,
+      ...(opaque ? [`opaque="${opaque}"`] : [])
+    ];
+
+    cfg._digestRetry = true;
+    cfg.headers = { ...cfg.headers, Authorization: authParts.join(', ') };
+    return inst(cfg);
+  });
+})(dApi, CFG.nvrUser, CFG.nvrPass);
 
 // In-memory store (w produkcji: Redis)
 const activeStreams = new Map();   // token → { ffmpeg, hlsPath, createdAt }
@@ -326,32 +365,29 @@ app.get('/api/stream/:token/status', (req, res) => {
 app.get('/api/download', async (req, res) => {
   const { channel, startTime, endTime, filePath: fp } = req.query;
 
-  let downloadUrl;
+  let downloadPath;
   let filename;
 
   if (fp) {
-    // Pobierz konkretny plik po ścieżce
     const safePath = fp.replace(/\.\./g, '');
-    downloadUrl = `http://${CFG.nvrHost}:${CFG.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
-    filename    = path.basename(safePath) || 'recording.dav';
+    downloadPath = `/cgi-bin/RPC_Loadfile${safePath}`;
+    filename     = path.basename(safePath) || 'recording.dav';
   } else {
-    // Pobierz przedział czasowy
     if (!channel || !startTime || !endTime) {
       return res.status(400).json({ error: 'Brak parametrów' });
     }
     const st = encodeURIComponent(startTime);
     const et = encodeURIComponent(endTime);
-    downloadUrl = `http://${CFG.nvrHost}:${CFG.nvrPort}/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${st}&endTime=${et}&subtype=0&Types=dav`;
-    filename    = `nagranie_ch${channel}_${startTime.replace(/[: ]/g, '-')}.dav`;
+    downloadPath = `/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${st}&endTime=${et}&subtype=0&Types=dav`;
+    filename     = `nagranie_ch${channel}_${startTime.replace(/[: ]/g, '-')}.dav`;
   }
 
   try {
-    const response = await axios({
+    const response = await dApi({
       method:       'get',
-      url:          downloadUrl,
-      auth:         { username: CFG.nvrUser, password: CFG.nvrPass },
+      url:          downloadPath,
       responseType: 'stream',
-      timeout:      0   // bez timeout dla dużych plików
+      timeout:      0
     });
 
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
