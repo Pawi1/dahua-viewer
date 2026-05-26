@@ -231,7 +231,8 @@ app.post('/api/stream/start', async (req, res) => {
   let rtspUrl;
   if (filePath) {
     // Stream przez ścieżkę pliku z rejestratora
-    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}${filePath}`;
+    const encodedPath = filePath.split('/').map(s => encodeURIComponent(s)).join('/');
+    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}${encodedPath}`;
   } else {
     // Playback przez przedział czasu
     const st = toRtspTime(startTime);
@@ -380,7 +381,8 @@ app.get('/api/download', async (req, res) => {
 
   if (fp) {
     const safePath = fp.replace(/\.\./g, '');
-    downloadPath = `/cgi-bin/RPC_Loadfile${safePath}`;
+    const encodedPath = safePath.split('/').map(s => encodeURIComponent(s)).join('/');
+    downloadPath = `/cgi-bin/RPC_Loadfile${encodedPath}`;
     filename     = path.basename(safePath) || 'recording.dav';
   } else {
     const channelNum = parseInt(channel, 10);
