@@ -43,7 +43,7 @@ const CFG = {
   hlsTtlMin:   parseInt(process.env.HLS_TTL_MIN || '60'),
   shareTtlH:   parseInt(process.env.SHARE_TTL_H || '72'),
   secretKey:   process.env.SECRET_KEY   || crypto.randomBytes(32).toString('hex'),
-  hlsDir:      process.env.HLS_DIR      || '/tmp/dahua_hls'
+  hlsDir:      process.env.HLS_DIR      || path.join(__dirname, '.hls')
 };
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
@@ -255,6 +255,16 @@ app.post('/api/stream/start', async (req, res) => {
     ffmpegInputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
     audioArgs = ['-c:a', 'copy'];
     console.log(`[stream:${token}] RTSP: ${inputUrl.replace(CFG.nvrPass, '***')}`);
+  }
+
+  // Verify hlsPath exists and is writable before spawning FFmpeg
+  try {
+    const testFile = path.join(hlsPath, '.writetest');
+    fs.writeFileSync(testFile, '');
+    fs.unlinkSync(testFile);
+    console.log(`[stream:${token}] hlsPath writable: ${hlsPath}`);
+  } catch (err) {
+    console.error(`[stream:${token}] hlsPath NOT writable: ${err.message} (path: ${hlsPath})`);
   }
 
   const ffmpegArgs = [...ffmpegInputArgs, '-c:v', 'copy', ...audioArgs, ...hlsArgs];
