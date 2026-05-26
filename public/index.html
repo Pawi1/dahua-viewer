@@ -1029,7 +1029,7 @@ async function playFile(idx) {
   if (currentToken) await stopStream(true);
 
   currentFile = file;
-  showLoading(true, 'Uruchamianie strumienia...', 'FFmpeg konwertuje RTSP → HLS, czekaj ~10s');
+  showLoading(true, 'Uruchamianie strumienia...', 'FFmpeg konwertuje do MP4, może zająć chwilę...');
 
   try {
     const body = {
@@ -1049,7 +1049,7 @@ async function playFile(idx) {
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
 
     currentToken = data.token;
-    showPlayer(data.streamUrl, file);
+    showPlayer(data.streamUrl, data.mediaType || 'video/mp4', file);
 
   } catch (err) {
     showLoading(false);
@@ -1057,29 +1057,26 @@ async function playFile(idx) {
   }
 }
 
-function showPlayer(streamUrl, file) {
+function showPlayer(streamUrl, mediaType, file) {
   document.getElementById('playerIdle').style.display = 'none';
 
   const videoEl = document.getElementById('main-player');
   videoEl.style.display = 'block';
 
+  const src = { type: mediaType || 'video/mp4', src: streamUrl };
+
   // Inicjalizuj lub zaktualizuj Video.js
   if (vjsPlayer && !vjsPlayer.isDisposed()) {
-    vjsPlayer.src({ type: 'application/x-mpegURL', src: streamUrl });
+    vjsPlayer.src(src);
   } else {
     vjsPlayer = videojs('main-player', {
-      controls:    true,
-      autoplay:    true,
-      preload:     'auto',
-      fluid:       false,
-      playbackRates: [0.5, 1, 1.5, 2],
-      html5: {
-        hls: { overrideNative: true },
-        nativeVideoTracks: false,
-        nativeAudioTracks: false
-      }
+      controls:      true,
+      autoplay:      true,
+      preload:       'auto',
+      fluid:         false,
+      playbackRates: [0.5, 1, 1.5, 2]
     });
-    vjsPlayer.src({ type: 'application/x-mpegURL', src: streamUrl });
+    vjsPlayer.src(src);
   }
 
   vjsPlayer.play().catch(() => {});
@@ -1098,9 +1095,9 @@ function showPlayer(streamUrl, file) {
   document.getElementById('playerTitle').textContent =
     `Kanał ${currentChannel}  ·  ${formatTime(file.startTime)} → ${formatTime(file.endTime)}`;
   document.getElementById('playerSub').textContent =
-    file.filePath ? file.filePath.split('/').pop() : `${file.type.toUpperCase()} · HLS stream`;
+    file.filePath ? file.filePath.split('/').pop() : `${file.type.toUpperCase()} · MP4 stream`;
 
-  // Po 12s jeśli nadal loading
+  // Po 15s jeśli nadal loading
   setTimeout(() => showLoading(false), 15000);
 }
 

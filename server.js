@@ -1,11 +1,11 @@
 /**
  * Dahua NVR Web Viewer — server.js
- * 
+ *
  * Wymagania:
  *   - Node.js >= 16
  *   - ffmpeg zainstalowany w systemie (sudo apt install ffmpeg)
  *   - npm install
- * 
+ *
  * Uruchomienie:
  *   NVR_HOST=192.168.1.108 NVR_USER=admin NVR_PASS=twoje_haslo node server.js
  *
@@ -17,7 +17,6 @@
  *   NVR_RTSP_PORT - Port RTSP                    (domyślnie: 554)
  *   NVR_CHANNELS  - Liczba kanałów               (domyślnie: 16)
  *   PORT          - Port serwera webowego        (domyślnie: 3000)
- *   HLS_TTL_MIN   - Czas życia segmentów HLS [min] (domyślnie: 60)
  *   SHARE_TTL_H   - Czas życia linku share [h]  (domyślnie: 72)
  *   SECRET_KEY    - Klucz do podpisywania tokenów (wygeneruj losowy!)
  */
@@ -40,18 +39,14 @@ const CFG = {
   rtspPort:    process.env.NVR_RTSP_PORT|| '554',
   channels:    parseInt(process.env.NVR_CHANNELS || '16'),
   port:        parseInt(process.env.PORT || '3000'),
-  hlsTtlMin:   parseInt(process.env.HLS_TTL_MIN || '60'),
   shareTtlH:   parseInt(process.env.SHARE_TTL_H || '72'),
   secretKey:   process.env.SECRET_KEY   || crypto.randomBytes(32).toString('hex'),
-  hlsDir:      process.env.HLS_DIR      || path.join(__dirname, '.hls')
 };
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-if (!fs.existsSync(CFG.hlsDir)) fs.mkdirSync(CFG.hlsDir, { recursive: true });
 
 // Axios instance do Dahua (Digest Auth)
 const dApi = axios.create({
@@ -101,9 +96,8 @@ const dApi = axios.create({
   });
 })(dApi, CFG.nvrUser, CFG.nvrPass);
 
-// In-memory store (w produkcji: Redis)
-const activeStreams = new Map();   // token → { ffmpeg, hlsPath, createdAt }
-const sharedLinks   = new Map();   // token → { channel, startTime, endTime, expiresAt }
+// In-memory store
+const sharedLinks = new Map();   // token → { channel, startTime, endTime, expiresAt }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function parseKeyValue(text) {
@@ -147,7 +141,6 @@ function parseMediaFiles(text) {
 
 // Formatuje timestamp Dahua → RTSP format: 2025_01_15_08_00_00
 function toRtspTime(str) {
-  // input: "2025-01-15 08:00:00"
   return str.replace(/-/g,'_').replace(/ /g,'_').replace(/:/g,'_');
 }
 
@@ -167,12 +160,10 @@ app.post('/api/search', async (req, res) => {
 
   let objectId = null;
   try {
-    // 1. Utwórz obiekt wyszukiwania
     const createResp = await dApi.get('/cgi-bin/mediaFileFind.cgi?action=factory.create');
     objectId = parseKeyValue(createResp.data).result;
     if (!objectId) throw new Error('Nie można utworzyć obiektu wyszukiwania (brak result)');
 
-    // 2. Ustaw kryteria
     const searchTypes = types || ['dav', 'mp4'];
     let typeParams = searchTypes.map((t, i) => `condition.Types[${i}]=${t}`).join('&');
     const query = [
@@ -186,7 +177,6 @@ app.post('/api/search', async (req, res) => {
 
     await dApi.get(`/cgi-bin/mediaFileFind.cgi?${query}`);
 
-    // 3. Pobierz wyniki — paginacja do wyczerpania
     const PAGE = 100;
     let allFiles = [];
     let totalFound = 0;
@@ -208,7 +198,6 @@ app.post('/api/search', async (req, res) => {
     console.error('[search]', err.message);
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    // Zawsze zamykaj obiekt
     if (objectId) {
       try {
         await dApi.get(`/cgi-bin/mediaFileFind.cgi?action=close&object=${objectId}`);
@@ -218,124 +207,90 @@ app.post('/api/search', async (req, res) => {
   }
 });
 
-// ─── API: START STREAM HLS ────────────────────────────────────────────────────
-app.post('/api/stream/start', async (req, res) => {
+// ─── API: START STREAM ────────────────────────────────────────────────────────
+// Zwraca URL do /api/stream/video — FFmpeg nie zapisuje plików, streamuje przez pipe
+app.post('/api/stream/start', (req, res) => {
   const { channel, startTime, endTime, filePath } = req.body;
 
-  const token   = genToken();
-  const hlsPath = path.join(CFG.hlsDir, token);
-  fs.mkdirSync(hlsPath, { recursive: true });
-
-  const hlsArgs = [
-    '-f', 'hls',
-    '-hls_time', '4',
-    '-hls_list_size', '0',
-    '-hls_flags', 'independent_segments',
-    '-hls_segment_type', 'mpegts',
-    '-hls_segment_filename', path.join(hlsPath, 'seg%04d.ts'),
-    path.join(hlsPath, 'index.m3u8')
-  ];
-
-  let inputUrl, ffmpegInputArgs, audioArgs;
+  const params = new URLSearchParams();
   if (filePath) {
-    // Plik DAV: HTTP proxy (szybszy niż RTSP — nie ogranicza do 1x realtime)
-    const safePath = filePath.replace(/\.\./g, '');
-    inputUrl = `http://127.0.0.1:${CFG.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
-    // -f dhav: wymuś demuxer DHAV (bez auto-detekcji z "low score")
-    // -err_detect ignore_err: toleruj uszkodzone pierwsze pakiety (dts=NOPTS)
-    ffmpegInputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
-    // G.711/PCMU audio z DHAV nie wejdzie do MPEG-TS — musi być transkodowane do AAC
-    audioArgs = ['-c:a', 'aac', '-b:a', '64k', '-ac', '1'];
-    console.log(`[stream:${token}] HTTP: /cgi-bin/RPC_Loadfile${safePath}`);
+    params.set('filePath', filePath);
   } else {
-    // Przedział czasu: RTSP playback
+    if (!channel || !startTime || !endTime) {
+      return res.status(400).json({ success: false, error: 'Brak parametrów' });
+    }
+    params.set('channel', channel);
+    params.set('startTime', startTime);
+    params.set('endTime', endTime);
+  }
+
+  const token = genToken();
+  res.json({
+    success:   true,
+    token,
+    streamUrl: `/api/stream/video?${params.toString()}`,
+    mediaType: 'video/mp4'
+  });
+});
+
+// ─── STREAM VIDEO ─────────────────────────────────────────────────────────────
+// FFmpeg → fragmented MP4 → stdout → HTTP response (brak zapisu do pliku)
+app.get('/api/stream/video', (req, res) => {
+  const { filePath, channel, startTime, endTime } = req.query;
+
+  let inputArgs, logDesc;
+  if (filePath) {
+    const safePath = filePath.replace(/\.\./g, '');
+    const inputUrl = `http://127.0.0.1:${CFG.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
+    inputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
+    logDesc = safePath;
+  } else if (startTime && endTime && channel) {
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
-    inputUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
-    ffmpegInputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
-    audioArgs = ['-c:a', 'copy'];
-    console.log(`[stream:${token}] RTSP: ${inputUrl.replace(CFG.nvrPass, '***')}`);
+    const inputUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
+    inputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
+    logDesc = `ch${channel} ${st}→${et}`;
+  } else {
+    return res.status(400).json({ error: 'Brak parametrów' });
   }
 
-  // Verify hlsPath exists and is writable before spawning FFmpeg
-  try {
-    const testFile = path.join(hlsPath, '.writetest');
-    fs.writeFileSync(testFile, '');
-    fs.unlinkSync(testFile);
-    console.log(`[stream:${token}] hlsPath writable: ${hlsPath}`);
-  } catch (err) {
-    console.error(`[stream:${token}] hlsPath NOT writable: ${err.message} (path: ${hlsPath})`);
-  }
+  const token = genToken(8);
+  console.log(`[stream:${token}] ${logDesc}`);
 
-  const ffmpegArgs = [...ffmpegInputArgs, '-c:v', 'copy', ...audioArgs, ...hlsArgs];
-  console.log(`[stream:${token}] FFmpeg args: ffmpeg ${ffmpegArgs.join(' ')}`);
-  const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const ffmpeg = spawn('ffmpeg', [
+    ...inputArgs,
+    '-c:v', 'copy',
+    '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    '-f', 'mp4', 'pipe:1'
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  let ffmpegError = '';
-  ffmpeg.stderr.on('data', (d) => {
-    const msg = d.toString();
-    ffmpegError += msg;
-    process.stdout.write(`[ffmpeg:${token}] ${msg}`);
-  });
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Accept-Ranges', 'none');
 
-  ffmpeg.on('error', (err) => {
-    console.error(`[stream:${token}] FFmpeg error:`, err.message);
+  ffmpeg.stdout.pipe(res);
+  ffmpeg.stderr.on('data', d => process.stdout.write(`[ffmpeg:${token}] ${d}`));
+
+  req.on('close', () => {
+    ffmpeg.kill('SIGTERM');
+    console.log(`[stream:${token}] Klient odłączył się`);
   });
 
   ffmpeg.on('close', (code) => {
     console.log(`[stream:${token}] FFmpeg zakończył (kod: ${code})`);
-    activeStreams.delete(token);
+    if (!res.writableEnded) res.end();
   });
 
-  activeStreams.set(token, {
-    ffmpeg,
-    hlsPath,
-    channel,
-    startTime,
-    endTime,
-    createdAt: Date.now()
-  });
-
-  // Czekaj na pojawienie się pierwszego segmentu (max 10s)
-  const ready = await new Promise((resolve) => {
-    const interval = setInterval(() => {
-      if (fs.existsSync(path.join(hlsPath, 'index.m3u8'))) {
-        // Sprawdź czy plik m3u8 nie jest pusty i ma segmenty
-        const content = fs.readFileSync(path.join(hlsPath, 'index.m3u8'), 'utf8');
-        if (content.includes('.ts')) {
-          clearInterval(interval);
-          resolve(true);
-        }
-      }
-    }, 500);
-    setTimeout(() => { clearInterval(interval); resolve(false); }, 12000);
-  });
-
-  if (!ready) {
-    ffmpeg.kill('SIGTERM');
-    activeStreams.delete(token);
-    fs.rmSync(hlsPath, { recursive: true, force: true });
-    
-    const hint = ffmpegError.includes('Connection refused') ? 
-      'Nie można połączyć z rejestratorem (sprawdź IP/port RTSP)' :
-      ffmpegError.includes('401') || ffmpegError.includes('Unauthorized') ? 
-      'Błąd autoryzacji RTSP (sprawdź login/hasło)' :
-      'Brak nagrania w podanym przedziale czasowym';
-    
-    return res.status(504).json({ success: false, error: hint });
-  }
-
-  res.json({
-    success:   true,
-    token,
-    streamUrl: `/hls/${token}/index.m3u8`
+  ffmpeg.on('error', (err) => {
+    console.error(`[stream:${token}] FFmpeg błąd:`, err.message);
+    if (!res.headersSent) res.status(500).end();
   });
 });
 
 // ─── PROXY: POBIERANIE PLIKU Z NVR (dla FFmpeg — obsługuje Digest Auth) ──────
-// FFmpeg nie wspiera Digest Auth w HTTP — proxy przekazuje plik z autoryzacją
 app.use('/nvr-proxy', async (req, res) => {
-  const nvrPath = req.url; // np. /cgi-bin/RPC_Loadfile/mnt/dvr/...
+  const nvrPath = req.url;
   try {
     const nvrResp = await dApi.get(nvrPath, { responseType: 'stream', timeout: 0 });
     if (nvrResp.headers['content-type'])
@@ -350,55 +305,10 @@ app.use('/nvr-proxy', async (req, res) => {
   }
 });
 
-// ─── SERWOWANIE HLS ───────────────────────────────────────────────────────────
-app.get('/hls/:token/:file', (req, res) => {
-  const { token, file } = req.params;
-  // Zabezpieczenie przed path traversal
-  if (!token.match(/^[a-f0-9]+$/) || !file.match(/^[\w.-]+$/)) {
-    return res.status(400).send('Invalid request');
-  }
-  const filePath = path.join(CFG.hlsDir, token, file);
-  if (!fs.existsSync(filePath)) return res.status(404).send('Segment not found');
-  
-  if (file.endsWith('.m3u8')) {
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-  } else if (file.endsWith('.ts')) {
-    res.setHeader('Content-Type', 'video/mp2t');
-  }
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(filePath);
-});
-
 // ─── API: STOP STREAM ─────────────────────────────────────────────────────────
+// Strumień kończy się automatycznie gdy klient zamknie połączenie z /api/stream/video
 app.post('/api/stream/stop', (req, res) => {
-  const { token } = req.body;
-  const stream = activeStreams.get(token);
-  if (stream) {
-    stream.ffmpeg.kill('SIGTERM');
-    setTimeout(() => {
-      fs.rmSync(stream.hlsPath, { recursive: true, force: true });
-      activeStreams.delete(token);
-    }, 3000);
-  }
   res.json({ success: true });
-});
-
-// ─── API: STATUS STREAMU ───────────────────────────────────────────────────────
-app.get('/api/stream/:token/status', (req, res) => {
-  const stream = activeStreams.get(req.params.token);
-  if (!stream) return res.json({ active: false });
-  
-  const m3u8 = path.join(stream.hlsPath, 'index.m3u8');
-  const segments = fs.existsSync(stream.hlsPath) 
-    ? fs.readdirSync(stream.hlsPath).filter(f => f.endsWith('.ts')).length
-    : 0;
-  
-  res.json({
-    active:    true,
-    segments,
-    uptime:    Math.round((Date.now() - stream.createdAt) / 1000),
-    hasM3u8:   fs.existsSync(m3u8)
-  });
 });
 
 // ─── API: POBIERANIE PLIKU ────────────────────────────────────────────────────
@@ -437,7 +347,6 @@ app.get('/api/download', async (req, res) => {
       res.setHeader('Content-Length', response.headers['content-length']);
     }
     response.data.pipe(res);
-    
     response.data.on('error', (err) => {
       console.error('[download] Stream error:', err.message);
     });
@@ -457,7 +366,7 @@ app.post('/api/share', (req, res) => {
   }
 
   const token     = genToken(20);
-  const ttl       = Math.min(parseInt(ttlHours || CFG.shareTtlH), 720); // max 30 dni
+  const ttl       = Math.min(parseInt(ttlHours || CFG.shareTtlH), 720);
   const expiresAt = Date.now() + ttl * 3600 * 1000;
 
   sharedLinks.set(token, { channel, startTime, endTime, filePath, expiresAt, ttl });
@@ -512,24 +421,6 @@ app.get('/api/share/:token', (req, res) => {
   res.json({ ...link, expiresAt: new Date(link.expiresAt).toISOString() });
 });
 
-// ─── API: LISTA AKTYWNYCH STREAMÓW (debug) ─────────────────────────────────────
-app.get('/api/streams', (req, res) => {
-  const list = [];
-  activeStreams.forEach((v, k) => {
-    list.push({
-      token:    k,
-      channel:  v.channel,
-      start:    v.startTime,
-      end:      v.endTime,
-      uptime:   Math.round((Date.now() - v.createdAt) / 1000),
-      segments: fs.existsSync(v.hlsPath)
-        ? fs.readdirSync(v.hlsPath).filter(f => f.endsWith('.ts')).length
-        : 0
-    });
-  });
-  res.json({ count: list.length, streams: list });
-});
-
 // ─── API: INFO O REJESTRATORZE ────────────────────────────────────────────────
 app.get('/api/nvr/info', async (req, res) => {
   try {
@@ -547,7 +438,6 @@ app.get('/api/nvr/channels', async (req, res) => {
     const count = parseInt(r.data.match(/count=(\d+)/)?.[1] || CFG.channels);
     res.json({ success: true, count });
   } catch (_) {
-    // Fallback na wartość z konfiguracji
     res.json({ success: true, count: CFG.channels });
   }
 });
@@ -555,24 +445,10 @@ app.get('/api/nvr/channels', async (req, res) => {
 // ─── CZYSZCZENIE ZASOBÓW ───────────────────────────────────────────────────────
 setInterval(() => {
   const now = Date.now();
-  const maxAge = CFG.hlsTtlMin * 60 * 1000;
-
-  activeStreams.forEach((stream, token) => {
-    if (now - stream.createdAt > maxAge) {
-      console.log(`[gc] Kończę stary stream: ${token}`);
-      stream.ffmpeg.kill('SIGTERM');
-      setTimeout(() => {
-        fs.rmSync(stream.hlsPath, { recursive: true, force: true });
-        activeStreams.delete(token);
-      }, 3000);
-    }
-  });
-
-  // Usuń wygasłe linki share
   sharedLinks.forEach((link, token) => {
     if (now > link.expiresAt) sharedLinks.delete(token);
   });
-}, 5 * 60 * 1000); // co 5 minut
+}, 5 * 60 * 1000);
 
 // ─── START SERWERA ────────────────────────────────────────────────────────────
 app.listen(CFG.port, () => {
@@ -584,14 +460,4 @@ app.listen(CFG.port, () => {
   console.log(`║  Użytkownik:  ${CFG.nvrUser}                           ║`);
   console.log(`║  Kanały:      ${CFG.channels}                               ║`);
   console.log('╚═══════════════════════════════════════════════════╝');
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('\nZatrzymuję serwer...');
-  activeStreams.forEach((stream) => {
-    stream.ffmpeg.kill('SIGTERM');
-    fs.rmSync(stream.hlsPath, { recursive: true, force: true });
-  });
-  process.exit(0);
 });
