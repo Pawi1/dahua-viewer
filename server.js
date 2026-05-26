@@ -240,40 +240,19 @@ app.post('/api/stream/start', async (req, res) => {
     path.join(hlsPath, 'index.m3u8')
   ];
 
-  let ffmpeg;
+  let rtspUrl;
   if (filePath) {
-    // Plik: HTTP → pipe stdin (RTSP URL nie toleruje nawiasów kwadratowych w ścieżce)
-    const safePath = filePath.replace(/\.\./g, '');
-    console.log(`[stream:${token}] HTTP→pipe: /cgi-bin/RPC_Loadfile${safePath}`);
-
-    let httpSource;
-    try {
-      httpSource = await dApi({ method: 'get', url: `/cgi-bin/RPC_Loadfile${safePath}`, responseType: 'stream', timeout: 0 });
-    } catch (err) {
-      fs.rmSync(hlsPath, { recursive: true, force: true });
-      return res.status(502).json({ success: false, error: `Błąd pobierania pliku: ${err.message}` });
-    }
-
-    console.log(`[stream:${token}] HTTP ${httpSource.status}, Content-Type: ${httpSource.headers['content-type'] || '?'}, Content-Length: ${httpSource.headers['content-length'] || '?'}`);
-
-    ffmpeg = spawn('ffmpeg', ['-f', 'avi', '-i', 'pipe:0', ...hlsArgs], { stdio: ['pipe', 'pipe', 'pipe'] });
-    httpSource.data.pipe(ffmpeg.stdin);
-    httpSource.data.on('error', (err) => {
-      console.error(`[stream:${token}] HTTP error:`, err.message);
-      ffmpeg.stdin.destroy();
-    });
-    ffmpeg.stdin.on('error', (err) => {
-      if (err.code !== 'EPIPE') console.error(`[stream:${token}] stdin:`, err.message);
-    });
+    // Plik: rtsp://host:port//path (podwójny ukośnik per docs 4.1.3, nawiasy literalne)
+    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/${filePath}`;
   } else {
     // Przedział czasu: RTSP playback
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
-    const rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
-    console.log(`[stream:${token}] RTSP: ${rtspUrl.replace(CFG.nvrPass, '***')}`);
-
-    ffmpeg = spawn('ffmpeg', ['-rtsp_transport', 'tcp', '-i', rtspUrl, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
+    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
   }
+
+  console.log(`[stream:${token}] RTSP: ${rtspUrl.replace(CFG.nvrPass, '***')}`);
+  const ffmpeg = spawn('ffmpeg', ['-rtsp_transport', 'tcp', '-i', rtspUrl, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let ffmpegError = '';
   ffmpeg.stderr.on('data', (d) => {
