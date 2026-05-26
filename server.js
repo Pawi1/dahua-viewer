@@ -77,8 +77,7 @@ const dApi = axios.create({
 
     const ha1    = crypto.createHash('md5').update(`${user}:${realm}:${pass}`).digest('hex');
     const absUrl = cfg.url?.startsWith('http') ? cfg.url : (cfg.baseURL || '') + (cfg.url || '');
-    const parsed = new URL(absUrl);
-    const uri    = parsed.pathname + parsed.search;
+    const uri    = absUrl.replace(/^https?:\/\/[^/?#]+/, '') || '/';
     const ha2    = crypto.createHash('md5').update(`${(cfg.method || 'GET').toUpperCase()}:${uri}`).digest('hex');
 
     const nc     = '00000001';
@@ -245,12 +244,11 @@ app.post('/api/stream/start', async (req, res) => {
   if (filePath) {
     // Plik: HTTP → pipe stdin (RTSP URL nie toleruje nawiasów kwadratowych w ścieżce)
     const safePath = filePath.replace(/\.\./g, '');
-    const encodedPath = safePath.split('/').map(s => encodeURIComponent(s)).join('/');
-    console.log(`[stream:${token}] HTTP→pipe: /cgi-bin/RPC_Loadfile${encodedPath}`);
+    console.log(`[stream:${token}] HTTP→pipe: /cgi-bin/RPC_Loadfile${safePath}`);
 
     let httpSource;
     try {
-      httpSource = await dApi({ method: 'get', url: `/cgi-bin/RPC_Loadfile${encodedPath}`, responseType: 'stream', timeout: 0 });
+      httpSource = await dApi({ method: 'get', url: `/cgi-bin/RPC_Loadfile${safePath}`, responseType: 'stream', timeout: 0 });
     } catch (err) {
       fs.rmSync(hlsPath, { recursive: true, force: true });
       return res.status(502).json({ success: false, error: `Błąd pobierania pliku: ${err.message}` });
@@ -396,8 +394,7 @@ app.get('/api/download', async (req, res) => {
 
   if (fp) {
     const safePath = fp.replace(/\.\./g, '');
-    const encodedPath = safePath.split('/').map(s => encodeURIComponent(s)).join('/');
-    downloadPath = `/cgi-bin/RPC_Loadfile${encodedPath}`;
+    downloadPath = `/cgi-bin/RPC_Loadfile${safePath}`;
     filename     = path.basename(safePath) || 'recording.dav';
   } else {
     const channelNum = parseInt(channel, 10);
