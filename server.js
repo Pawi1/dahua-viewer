@@ -228,13 +228,11 @@ app.post('/api/stream/start', async (req, res) => {
 
   const hlsArgs = [
     '-c:v', 'copy',
-    '-c:a', 'aac',
-    '-b:a', '128k',
+    '-c:a', 'copy',
     '-f', 'hls',
     '-hls_time', '4',
     '-hls_list_size', '0',
-    '-hls_flags', 'independent_segments+delete_segments',
-    '-hls_delete_threshold', '3',
+    '-hls_flags', 'independent_segments',
     '-hls_segment_type', 'mpegts',
     '-hls_segment_filename', path.join(hlsPath, 'seg%04d.ts'),
     path.join(hlsPath, 'index.m3u8')
