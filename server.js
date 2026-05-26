@@ -254,7 +254,9 @@ app.post('/api/stream/start', async (req, res) => {
       return res.status(502).json({ success: false, error: `Błąd pobierania pliku: ${err.message}` });
     }
 
-    ffmpeg = spawn('ffmpeg', ['-i', 'pipe:0', ...hlsArgs], { stdio: ['pipe', 'pipe', 'pipe'] });
+    console.log(`[stream:${token}] HTTP ${httpSource.status}, Content-Type: ${httpSource.headers['content-type'] || '?'}, Content-Length: ${httpSource.headers['content-length'] || '?'}`);
+
+    ffmpeg = spawn('ffmpeg', ['-f', 'avi', '-i', 'pipe:0', ...hlsArgs], { stdio: ['pipe', 'pipe', 'pipe'] });
     httpSource.data.pipe(ffmpeg.stdin);
     httpSource.data.on('error', (err) => {
       console.error(`[stream:${token}] HTTP error:`, err.message);
