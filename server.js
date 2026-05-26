@@ -186,14 +186,21 @@ app.post('/api/search', async (req, res) => {
 
     await dApi.get(`/cgi-bin/mediaFileFind.cgi?${query}`);
 
-    // 3. Pobierz wyniki (max 200)
-    const findResp = await dApi.get(
-      `/cgi-bin/mediaFileFind.cgi?action=findNextFile&object=${objectId}&count=100`
-    );
+    // 3. Pobierz wyniki — paginacja do wyczerpania
+    const PAGE = 100;
+    let allFiles = [];
+    let totalFound = 0;
+    while (true) {
+      const findResp = await dApi.get(
+        `/cgi-bin/mediaFileFind.cgi?action=findNextFile&object=${objectId}&count=${PAGE}`
+      );
+      const parsed = parseMediaFiles(findResp.data);
+      totalFound += parsed.found;
+      allFiles = allFiles.concat(parsed.files);
+      if (parsed.found < PAGE) break;
+    }
 
-    const parsed = parseMediaFiles(findResp.data);
-
-    res.json({ success: true, ...parsed });
+    res.json({ success: true, found: totalFound, files: allFiles });
 
   } catch (err) {
     console.error('[search]', err.message);
@@ -376,8 +383,8 @@ app.get('/api/download', async (req, res) => {
     if (!channel || !startTime || !endTime) {
       return res.status(400).json({ error: 'Brak parametrów' });
     }
-    const st = encodeURIComponent(startTime);
-    const et = encodeURIComponent(endTime);
+    const st = startTime.replace(/ /g, '%20');
+    const et = endTime.replace(/ /g, '%20');
     downloadPath = `/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${st}&endTime=${et}&subtype=0&Types=dav`;
     filename     = `nagranie_ch${channel}_${startTime.replace(/[: ]/g, '-')}.dav`;
   }
