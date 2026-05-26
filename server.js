@@ -238,19 +238,23 @@ app.post('/api/stream/start', async (req, res) => {
     path.join(hlsPath, 'index.m3u8')
   ];
 
-  let rtspUrl;
+  let inputUrl, ffmpegInputArgs;
   if (filePath) {
-    // Plik: rtsp://host:port//path (podwójny ukośnik per docs 4.1.3, nawiasy literalne)
-    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/${filePath}`;
+    // Plik DAV: HTTP proxy (szybszy niż RTSP — nie ogranicza do 1x realtime)
+    const safePath = filePath.replace(/\.\./g, '');
+    inputUrl = `http://127.0.0.1:${CFG.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
+    ffmpegInputArgs = ['-fflags', '+genpts', '-i', inputUrl];
+    console.log(`[stream:${token}] HTTP: /cgi-bin/RPC_Loadfile${safePath}`);
   } else {
     // Przedział czasu: RTSP playback
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
-    rtspUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
+    inputUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
+    ffmpegInputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
+    console.log(`[stream:${token}] RTSP: ${inputUrl.replace(CFG.nvrPass, '***')}`);
   }
 
-  console.log(`[stream:${token}] RTSP: ${rtspUrl.replace(CFG.nvrPass, '***')}`);
-  const ffmpeg = spawn('ffmpeg', ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', rtspUrl, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const ffmpeg = spawn('ffmpeg', [...ffmpegInputArgs, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let ffmpegError = '';
   ffmpeg.stderr.on('data', (d) => {
@@ -311,6 +315,24 @@ app.post('/api/stream/start', async (req, res) => {
     token,
     streamUrl: `/hls/${token}/index.m3u8`
   });
+});
+
+// ─── PROXY: POBIERANIE PLIKU Z NVR (dla FFmpeg — obsługuje Digest Auth) ──────
+// FFmpeg nie wspiera Digest Auth w HTTP — proxy przekazuje plik z autoryzacją
+app.use('/nvr-proxy', async (req, res) => {
+  const nvrPath = req.url; // np. /cgi-bin/RPC_Loadfile/mnt/dvr/...
+  try {
+    const nvrResp = await dApi.get(nvrPath, { responseType: 'stream', timeout: 0 });
+    if (nvrResp.headers['content-type'])
+      res.setHeader('Content-Type', nvrResp.headers['content-type']);
+    if (nvrResp.headers['content-length'])
+      res.setHeader('Content-Length', nvrResp.headers['content-length']);
+    nvrResp.data.pipe(res);
+    req.on('close', () => nvrResp.data?.destroy?.());
+  } catch (e) {
+    console.error('[nvr-proxy]', e.message);
+    if (!res.headersSent) res.status(502).end();
+  }
 });
 
 // ─── SERWOWANIE HLS ───────────────────────────────────────────────────────────
