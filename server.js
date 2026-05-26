@@ -30,7 +30,6 @@ const { spawn }  = require('child_process');
 const path       = require('path');
 const fs         = require('fs');
 const crypto     = require('crypto');
-const http       = require('http');
 
 // ─── KONFIGURACJA ────────────────────────────────────────────────────────────
 const CFG = {
@@ -98,6 +97,7 @@ const dApi = axios.create({
 
     cfg._digestRetry = true;
     cfg.headers = { ...cfg.headers, Authorization: authParts.join(', ') };
+    if (error.response?.data?.resume) error.response.data.resume();
     return inst(cfg);
   });
 })(dApi, CFG.nvrUser, CFG.nvrPass);
@@ -160,8 +160,9 @@ function genToken(len = 24) {
 // ─── API: WYSZUKIWANIE NAGRAŃ ─────────────────────────────────────────────────
 app.post('/api/search', async (req, res) => {
   const { channel, startTime, endTime, types } = req.body;
+  const channelNum = parseInt(channel, 10);
 
-  if (!channel || !startTime || !endTime) {
+  if (!channelNum || !startTime || !endTime) {
     return res.status(400).json({ error: 'Brak wymaganych parametrów: channel, startTime, endTime' });
   }
 
@@ -178,7 +179,7 @@ app.post('/api/search', async (req, res) => {
     const query = [
       `action=findFile`,
       `object=${objectId}`,
-      `condition.Channel=${channel}`,
+      `condition.Channel=${channelNum}`,
       `condition.StartTime=${startTime.replace(/ /g, '%20')}`,
       `condition.EndTime=${endTime.replace(/ /g, '%20')}`,
       typeParams
@@ -195,6 +196,8 @@ app.post('/api/search', async (req, res) => {
         `/cgi-bin/mediaFileFind.cgi?action=findNextFile&object=${objectId}&count=${PAGE}`
       );
       const parsed = parseMediaFiles(findResp.data);
+      const offset = allFiles.length;
+      parsed.files.forEach((f) => { f.id = offset + f.id; });
       totalFound += parsed.found;
       allFiles = allFiles.concat(parsed.files);
       if (parsed.found < PAGE) break;
@@ -380,12 +383,13 @@ app.get('/api/download', async (req, res) => {
     downloadPath = `/cgi-bin/RPC_Loadfile${safePath}`;
     filename     = path.basename(safePath) || 'recording.dav';
   } else {
-    if (!channel || !startTime || !endTime) {
+    const channelNum = parseInt(channel, 10);
+    if (!channelNum || !startTime || !endTime) {
       return res.status(400).json({ error: 'Brak parametrów' });
     }
     const st = startTime.replace(/ /g, '%20');
     const et = endTime.replace(/ /g, '%20');
-    downloadPath = `/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${st}&endTime=${et}&subtype=0&Types=dav`;
+    downloadPath = `/cgi-bin/loadfile.cgi?action=startLoad&channel=${channelNum}&startTime=${st}&endTime=${et}&subtype=0&Types=dav`;
     filename     = `nagranie_ch${channel}_${startTime.replace(/[: ]/g, '-')}.dav`;
   }
 
