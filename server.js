@@ -227,8 +227,6 @@ app.post('/api/stream/start', async (req, res) => {
   fs.mkdirSync(hlsPath, { recursive: true });
 
   const hlsArgs = [
-    '-c:v', 'copy',
-    '-c:a', 'copy',
     '-f', 'hls',
     '-hls_time', '4',
     '-hls_list_size', '0',
@@ -238,12 +236,16 @@ app.post('/api/stream/start', async (req, res) => {
     path.join(hlsPath, 'index.m3u8')
   ];
 
-  let inputUrl, ffmpegInputArgs;
+  let inputUrl, ffmpegInputArgs, audioArgs;
   if (filePath) {
     // Plik DAV: HTTP proxy (szybszy niż RTSP — nie ogranicza do 1x realtime)
     const safePath = filePath.replace(/\.\./g, '');
     inputUrl = `http://127.0.0.1:${CFG.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
-    ffmpegInputArgs = ['-fflags', '+genpts', '-i', inputUrl];
+    // -f dhav: wymuś demuxer DHAV (bez auto-detekcji z "low score")
+    // -err_detect ignore_err: toleruj uszkodzone pierwsze pakiety (dts=NOPTS)
+    ffmpegInputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
+    // G.711/PCMU audio z DHAV nie wejdzie do MPEG-TS — musi być transkodowane do AAC
+    audioArgs = ['-c:a', 'aac', '-b:a', '64k', '-ac', '1'];
     console.log(`[stream:${token}] HTTP: /cgi-bin/RPC_Loadfile${safePath}`);
   } else {
     // Przedział czasu: RTSP playback
@@ -251,10 +253,13 @@ app.post('/api/stream/start', async (req, res) => {
     const et = toRtspTime(endTime);
     inputUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
     ffmpegInputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
+    audioArgs = ['-c:a', 'copy'];
     console.log(`[stream:${token}] RTSP: ${inputUrl.replace(CFG.nvrPass, '***')}`);
   }
 
-  const ffmpeg = spawn('ffmpeg', [...ffmpegInputArgs, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const ffmpegArgs = [...ffmpegInputArgs, '-c:v', 'copy', ...audioArgs, ...hlsArgs];
+  console.log(`[stream:${token}] FFmpeg args: ffmpeg ${ffmpegArgs.join(' ')}`);
+  const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let ffmpegError = '';
   ffmpeg.stderr.on('data', (d) => {
