@@ -250,7 +250,7 @@ app.post('/api/stream/start', async (req, res) => {
   }
 
   console.log(`[stream:${token}] RTSP: ${rtspUrl.replace(CFG.nvrPass, '***')}`);
-  const ffmpeg = spawn('ffmpeg', ['-rtsp_transport', 'tcp', '-i', rtspUrl, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const ffmpeg = spawn('ffmpeg', ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', rtspUrl, ...hlsArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let ffmpegError = '';
   ffmpeg.stderr.on('data', (d) => {
