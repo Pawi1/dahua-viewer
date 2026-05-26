@@ -48,6 +48,12 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+const TMPDIR = process.env.OUT_DIR || '/tmp/dahua_viewer';
+fs.mkdirSync(TMPDIR, { recursive: true });
+
+// In-memory store dla aktywnych streamów
+const activeStreams = new Map(); // token → { ff, outFile, startedAt, endedAt, logDesc }
+
 // Axios instance do Dahua (Digest Auth)
 const dApi = axios.create({
   baseURL: `http://${CFG.nvrHost}:${CFG.nvrPort}`,
@@ -149,6 +155,23 @@ function genToken(len = 24) {
   return crypto.randomBytes(len).toString('hex');
 }
 
+function fileSize(file) {
+  try { return fs.statSync(file).size; } catch { return 0; }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForFileBytes(file, minBytes, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (fileSize(file) >= minBytes) return true;
+    await sleep(150);
+  }
+  return false;
+}
+
 // ─── API: WYSZUKIWANIE NAGRAŃ ─────────────────────────────────────────────────
 app.post('/api/search', async (req, res) => {
   const { channel, startTime, endTime, types } = req.body;
@@ -208,35 +231,9 @@ app.post('/api/search', async (req, res) => {
 });
 
 // ─── API: START STREAM ────────────────────────────────────────────────────────
-// Zwraca URL do /api/stream/video — FFmpeg nie zapisuje plików, streamuje przez pipe
+// Spawuje FFmpeg → rosnący plik fMP4 w /tmp; zwraca token do /api/stream/video
 app.post('/api/stream/start', (req, res) => {
   const { channel, startTime, endTime, filePath } = req.body;
-
-  const params = new URLSearchParams();
-  if (filePath) {
-    params.set('filePath', filePath);
-  } else {
-    if (!channel || !startTime || !endTime) {
-      return res.status(400).json({ success: false, error: 'Brak parametrów' });
-    }
-    params.set('channel', channel);
-    params.set('startTime', startTime);
-    params.set('endTime', endTime);
-  }
-
-  const token = genToken();
-  res.json({
-    success:   true,
-    token,
-    streamUrl: `/api/stream/video?${params.toString()}`,
-    mediaType: 'video/mp4'
-  });
-});
-
-// ─── STREAM VIDEO ─────────────────────────────────────────────────────────────
-// FFmpeg → fragmented MP4 → stdout → HTTP response (brak zapisu do pliku)
-app.get('/api/stream/video', (req, res) => {
-  const { filePath, channel, startTime, endTime } = req.query;
 
   let inputArgs, logDesc;
   if (filePath) {
@@ -244,48 +241,91 @@ app.get('/api/stream/video', (req, res) => {
     const inputUrl = `http://127.0.0.1:${CFG.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
     inputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
     logDesc = safePath;
-  } else if (startTime && endTime && channel) {
+  } else if (channel && startTime && endTime) {
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
     const inputUrl = `rtsp://${CFG.nvrUser}:${encodeURIComponent(CFG.nvrPass)}@${CFG.nvrHost}:${CFG.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
     inputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
     logDesc = `ch${channel} ${st}→${et}`;
   } else {
-    return res.status(400).json({ error: 'Brak parametrów' });
+    return res.status(400).json({ success: false, error: 'Brak parametrów' });
   }
 
-  const token = genToken(8);
-  console.log(`[stream:${token}] ${logDesc}`);
+  const token = genToken(16);
+  const outFile = path.join(TMPDIR, `${token}.mp4`);
 
-  const ffmpeg = spawn('ffmpeg', [
+  console.log(`[stream:${token}] start → ${logDesc}`);
+
+  const ff = spawn('ffmpeg', [
+    '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
     '-c:v', 'copy',
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-    '-f', 'mp4', 'pipe:1'
-  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    '-frag_duration', '1000000',
+    '-f', 'mp4', outFile
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Accept-Ranges', 'none');
+  const job = { ff, outFile, startedAt: Date.now(), endedAt: null, logDesc };
+  activeStreams.set(token, job);
 
-  ffmpeg.stdout.pipe(res);
-  ffmpeg.stderr.on('data', d => process.stdout.write(`[ffmpeg:${token}] ${d}`));
-
-  req.on('close', () => {
-    ffmpeg.kill('SIGTERM');
-    console.log(`[stream:${token}] Klient odłączył się`);
-  });
-
-  ffmpeg.on('close', (code) => {
+  ff.stderr.on('data', d => process.stdout.write(`[ffmpeg:${token}] ${d}`));
+  ff.on('error', err => console.error(`[stream:${token}] spawn error:`, err.message));
+  ff.on('close', (code) => {
+    job.endedAt = Date.now();
     console.log(`[stream:${token}] FFmpeg zakończył (kod: ${code})`);
-    if (!res.writableEnded) res.end();
   });
 
-  ffmpeg.on('error', (err) => {
-    console.error(`[stream:${token}] FFmpeg błąd:`, err.message);
-    if (!res.headersSent) res.status(500).end();
+  res.json({
+    success:   true,
+    token,
+    streamUrl: `/api/stream/video?token=${token}`,
+    mediaType: 'video/mp4'
   });
+});
+
+// ─── STREAM VIDEO ─────────────────────────────────────────────────────────────
+// Czeka na 256KB bufora, potem streamuje rosnący plik MP4 do klienta
+app.get('/api/stream/video', async (req, res) => {
+  const { token } = req.query;
+  const job = activeStreams.get(token);
+  if (!job) return res.status(404).json({ error: 'Nieznany token strumienia' });
+
+  const PREBUFFER = 256 * 1024;
+  const ready = await waitForFileBytes(job.outFile, PREBUFFER, 25000);
+  if (!ready && !fs.existsSync(job.outFile)) {
+    return res.status(503).json({ error: 'FFmpeg nie zdążył przygotować danych' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type':  'video/mp4',
+    'Cache-Control': 'no-store',
+    'Accept-Ranges': 'none'
+  });
+
+  let pos = 0;
+  let closed = false;
+  req.on('close', () => { closed = true; });
+
+  while (!closed) {
+    const size = fileSize(job.outFile);
+    if (size > pos) {
+      await new Promise(resolve => {
+        const rs = fs.createReadStream(job.outFile, { start: pos, end: size - 1 });
+        rs.on('data', chunk => { if (!res.write(chunk)) rs.pause(); });
+        res.on('drain', () => rs.resume());
+        rs.on('end', resolve);
+        rs.on('error', resolve);
+      });
+      pos = size;
+    } else {
+      if (job.endedAt !== null) break;
+      await sleep(150);
+    }
+  }
+
+  if (!res.writableEnded) res.end();
+  console.log(`[stream:${token}] Klient odłączył się (pos=${pos})`);
 });
 
 // ─── PROXY: POBIERANIE PLIKU Z NVR (dla FFmpeg — obsługuje Digest Auth) ──────
@@ -306,8 +346,13 @@ app.use('/nvr-proxy', async (req, res) => {
 });
 
 // ─── API: STOP STREAM ─────────────────────────────────────────────────────────
-// Strumień kończy się automatycznie gdy klient zamknie połączenie z /api/stream/video
 app.post('/api/stream/stop', (req, res) => {
+  const { token } = req.body;
+  const job = activeStreams.get(token);
+  if (job && job.endedAt === null) {
+    job.ff.kill('SIGTERM');
+    console.log(`[stream:${token}] stop requested`);
+  }
   res.json({ success: true });
 });
 
@@ -445,8 +490,19 @@ app.get('/api/nvr/channels', async (req, res) => {
 // ─── CZYSZCZENIE ZASOBÓW ───────────────────────────────────────────────────────
 setInterval(() => {
   const now = Date.now();
+
   sharedLinks.forEach((link, token) => {
     if (now > link.expiresAt) sharedLinks.delete(token);
+  });
+
+  // Usuń stare pliki tymczasowe (>2h po zakończeniu FFmpeg)
+  const TTL = 2 * 60 * 60 * 1000;
+  activeStreams.forEach((job, token) => {
+    if (job.endedAt && now - job.endedAt > TTL) {
+      try { fs.rmSync(job.outFile, { force: true }); } catch {}
+      activeStreams.delete(token);
+      console.log(`[gc] usunięto stream ${token}`);
+    }
   });
 }, 5 * 60 * 1000);
 
