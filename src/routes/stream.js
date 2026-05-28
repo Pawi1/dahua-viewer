@@ -40,7 +40,9 @@ router.post('/start', (req, res) => {
   const ff = spawn('ffmpeg', [
     '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
-    '-c:v', 'copy',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
+    '-profile:v', 'baseline', '-level', '4.0',
+    '-pix_fmt', 'yuv420p', '-avoid_negative_ts', 'make_zero',
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
     '-frag_duration', '1000000',
