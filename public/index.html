@@ -6,8 +6,6 @@
   <title>NVR Viewer — NVR Viewer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video-js.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
 
   <style>
     /* ─── VARIABLES ──────────────────────────────────────────── */
@@ -469,37 +467,15 @@
       text-transform: uppercase;
     }
 
-    /* Video.js overrides */
-    #main-player { width: 100%; height: 100%; }
-    .video-js {
-      width: 100% !important;
-      height: 100% !important;
+    /* Native video element */
+    #main-player {
+      width: 100%;
+      height: 100%;
       background: #000;
+      display: block;
     }
-    .video-js .vjs-big-play-button {
-      border: 2px solid var(--accent);
-      background: rgba(200,0,30,.15);
-      border-radius: 50%;
-      width: 56px; height: 56px;
-      line-height: 52px;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      margin: 0;
-      transition: all .2s;
-    }
-    .video-js:hover .vjs-big-play-button,
-    .video-js .vjs-big-play-button:focus {
-      background: rgba(200,0,30,.3);
-      box-shadow: 0 0 24px rgba(200,0,30,.4);
-    }
-    .video-js .vjs-control-bar {
-      background: linear-gradient(transparent, rgba(0,0,0,.85));
-      height: 42px;
-    }
-    .video-js .vjs-progress-control { flex: 1; }
-    .video-js .vjs-play-progress { background: var(--accent); }
-    .video-js .vjs-volume-level { background: var(--accent); }
-    .video-js .vjs-play-progress::before { color: var(--accent); }
+    #main-player::-webkit-media-controls-panel { background: rgba(0,0,0,.7); }
+    #main-player:focus { outline: none; }
 
     /* ─── PLAYER TOOLBAR ─────────────────────────────────────── */
     .player-toolbar {
@@ -786,9 +762,7 @@
         <div class="idle-hint">NVR Viewer · NVR Viewer</div>
       </div>
 
-      <video id="main-player" class="video-js vjs-default-skin" controls playsinline style="display:none">
-        <p class="vjs-no-js">Do odtwarzania wideo wymagana jest obsługa JavaScript.</p>
-      </video>
+      <video id="main-player" controls playsinline style="display:none"></video>
 
       <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
@@ -870,11 +844,11 @@
    NVR Viewer — Frontend JS
 ══════════════════════════════════════════════════════════════ */
 
-let vjsPlayer    = null;
 let currentToken = null;
 let currentFile  = null;
 let currentChannel = 1;
 let searchResults = [];
+const videoEl = () => document.getElementById('main-player');
 
 document.addEventListener('DOMContentLoaded', async () => {
   initClock();
@@ -1067,27 +1041,15 @@ async function playFile(idx) {
 
 function showPlayer(streamUrl, mediaType, file) {
   document.getElementById('playerIdle').style.display = 'none';
-  const videoEl = document.getElementById('main-player');
-  videoEl.style.display = 'block';
 
-  const src = { type: mediaType || 'video/mp4', src: streamUrl };
+  const v = videoEl();
+  v.style.display = 'block';
+  v.src = streamUrl;
+  v.load();
 
-  if (vjsPlayer && !vjsPlayer.isDisposed()) {
-    vjsPlayer.src(src);
-  } else {
-    vjsPlayer = videojs('main-player', {
-      controls: true, autoplay: true, preload: 'auto', fluid: false,
-      playbackRates: [0.5, 1, 1.5, 2]
-    });
-    vjsPlayer.src(src);
-  }
-
-  vjsPlayer.play().catch(() => {});
-  vjsPlayer.one('playing', () => showLoading(false));
-  vjsPlayer.on('error', () => {
-    showLoading(false);
-    toast('Błąd odtwarzania strumienia wideo', 'error');
-  });
+  v.onplaying = () => showLoading(false);
+  v.onerror   = () => { showLoading(false); toast('Błąd odtwarzania strumienia wideo', 'error'); };
+  v.play().catch(() => {});
 
   document.getElementById('playerToolbar').style.display = 'flex';
   document.getElementById('playerTitle').textContent =
@@ -1101,10 +1063,10 @@ function showPlayer(streamUrl, mediaType, file) {
 async function stopStream(silent = false) {
   if (!currentToken) return;
 
-  if (vjsPlayer && !vjsPlayer.isDisposed()) {
-    vjsPlayer.pause();
-    vjsPlayer.reset();
-  }
+  const v = videoEl();
+  v.pause();
+  v.src = '';
+  v.load();
 
   try {
     await fetch('/api/stream/stop', {
@@ -1116,7 +1078,7 @@ async function stopStream(silent = false) {
 
   currentToken = null;
   currentFile  = null;
-  document.getElementById('main-player').style.display   = 'none';
+  v.style.display = 'none';
   document.getElementById('playerIdle').style.display    = 'flex';
   document.getElementById('playerToolbar').style.display = 'none';
   showLoading(false);
