@@ -1017,7 +1017,7 @@ async function playFile(idx) {
   if (currentToken) await stopStream(true);
 
   currentFile = file;
-  showLoading(true, 'Uruchamianie strumienia...', 'FFmpeg przetwarza nagranie, może zająć chwilę...');
+  showLoading(true, 'Buforowanie nagrania...', 'Trwa wczytywanie ~15s nagrania, proszę czekać...');
 
   try {
     const body = { channel: currentChannel, startTime: file.startTime, endTime: file.endTime };
@@ -1047,9 +1047,8 @@ function showPlayer(streamUrl, mediaType, file) {
   v.src = streamUrl;
   v.load();
 
-  v.onplaying = () => showLoading(false);
-  v.onerror   = () => { showLoading(false); toast('Błąd odtwarzania strumienia wideo', 'error'); };
-  v.play().catch(() => {});
+  v.oncanplaythrough = () => { showLoading(false); v.play().catch(() => {}); };
+  v.onerror = () => { showLoading(false); toast('Błąd odtwarzania strumienia wideo', 'error'); };
 
   document.getElementById('playerToolbar').style.display = 'flex';
   document.getElementById('playerTitle').textContent =

@@ -68,8 +68,8 @@ router.get('/video', async (req, res) => {
   const job = streamStore.get(token);
   if (!job) return res.status(404).json({ error: 'Nieznany token strumienia' });
 
-  const PREBUFFER = 256 * 1024;
-  const ready = await waitForFileBytes(job.outFile, PREBUFFER, 25000);
+  const PREBUFFER = 5 * 1024 * 1024; // ~15-20s przy 2.5Mbit/s
+  const ready = await waitForFileBytes(job.outFile, PREBUFFER, 60000);
   if (!ready && !fs.existsSync(job.outFile)) {
     return res.status(503).json({ error: 'FFmpeg nie zdążył przygotować danych' });
   }
