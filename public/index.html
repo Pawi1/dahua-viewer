@@ -520,6 +520,18 @@
     }
     .loading-overlay.hidden { display: none; }
 
+    .buffering-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.45);
+      z-index: 50;
+    }
+    .buffering-overlay.hidden { display: none; }
+    .buffering-overlay .spinner { width: 48px; height: 48px; border-width: 3px; }
+
     .spinner {
       width: 36px; height: 36px;
       border: 2px solid rgba(255,255,255,.15);
@@ -764,10 +776,16 @@
 
       <video id="main-player" controls playsinline style="display:none"></video>
 
+      <!-- Initial load overlay -->
       <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
         <div class="loading-text" id="loadingText">Ładowanie strumienia...</div>
         <div class="loading-sub" id="loadingSub">Proszę czekać</div>
+      </div>
+
+      <!-- In-playback buffering indicator -->
+      <div class="buffering-overlay hidden" id="bufferingOverlay">
+        <div class="spinner"></div>
       </div>
     </div>
 
@@ -1044,11 +1062,32 @@ function showPlayer(streamUrl, mediaType, file) {
 
   const v = videoEl();
   v.style.display = 'block';
+
+  // Wyczyść poprzednie listenery
+  v.oncanplay = null;
+  v.onplaying = null;
+  v.onwaiting = null;
+  v.onstalled = null;
+  v.onerror   = null;
+
   v.src = streamUrl;
   v.load();
 
-  v.oncanplaythrough = () => { showLoading(false); v.play().catch(() => {}); };
-  v.onerror = () => { showLoading(false); toast('Błąd odtwarzania strumienia wideo', 'error'); };
+  // canplay odpala dla streamingu (w odróżnieniu od canplaythrough który wymaga EOF)
+  v.oncanplay = () => { v.play().catch(() => {}); };
+
+  // playing = pierwsza klatka wyrenderowana → chowamy overlay
+  v.onplaying = () => { showLoading(false); showBuffering(false); };
+
+  // waiting/stalled = bufor się wyczerpał w trakcie odtwarzania
+  v.onwaiting = () => showBuffering(true);
+  v.onstalled = () => showBuffering(true);
+
+  v.onerror = () => {
+    showLoading(false);
+    showBuffering(false);
+    toast('Błąd odtwarzania strumienia wideo', 'error');
+  };
 
   document.getElementById('playerToolbar').style.display = 'flex';
   document.getElementById('playerTitle').textContent =
@@ -1056,7 +1095,12 @@ function showPlayer(streamUrl, mediaType, file) {
   document.getElementById('playerSub').textContent =
     file.filePath ? file.filePath.split('/').pop() : `${file.type.toUpperCase()} · MP4 stream`;
 
-  setTimeout(() => showLoading(false), 20000);
+  // Fallback: 90s = czas na 5MB prebuffer (~20s) + margines
+  setTimeout(() => showLoading(false), 90000);
+}
+
+function showBuffering(show) {
+  document.getElementById('bufferingOverlay').classList.toggle('hidden', !show);
 }
 
 async function stopStream(silent = false) {
