@@ -1035,29 +1035,35 @@ async function playFile(idx) {
   if (currentToken) await stopStream(true);
 
   currentFile = file;
+  console.log(`[playFile] Starting: idx=${idx}, ch=${currentChannel}, time=${file.startTime}→${file.endTime}`);
   showLoading(true, 'Buforowanie nagrania...', 'Trwa wczytywanie ~15s nagrania, proszę czekać...');
 
   try {
     const body = { channel: currentChannel, startTime: file.startTime, endTime: file.endTime };
     if (file.filePath) body.filePath = file.filePath;
 
+    console.log(`[playFile] Fetching /api/stream/start with:`, body);
     const r = await fetch('/api/stream/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await r.json();
+    console.log(`[playFile] Response:`, data);
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
 
     currentToken = data.token;
+    console.log(`[playFile] Token received: ${currentToken}, URL: ${data.streamUrl}`);
     showPlayer(data.streamUrl, data.mediaType || 'video/mp4', file);
   } catch (err) {
+    console.error(`[playFile] Error:`, err.message);
     showLoading(false);
     toast(err.message, 'error');
   }
 }
 
 function showPlayer(streamUrl, mediaType, file) {
+  console.log(`[showPlayer] streamUrl=${streamUrl}, mediaType=${mediaType}`);
   document.getElementById('playerIdle').style.display = 'none';
 
   const v = videoEl();
@@ -1071,19 +1077,28 @@ function showPlayer(streamUrl, mediaType, file) {
   v.onerror   = null;
 
   v.src = streamUrl;
+  console.log(`[showPlayer] Setting src=${streamUrl}, calling load()`);
   v.load();
 
   // canplay odpala dla streamingu (w odróżnieniu od canplaythrough który wymaga EOF)
-  v.oncanplay = () => { v.play().catch(() => {}); };
+  v.oncanplay = () => {
+    console.log(`[video] canplay event`);
+    v.play().catch(e => console.error(`[video] play() failed:`, e.message));
+  };
 
   // playing = pierwsza klatka wyrenderowana → chowamy overlay
-  v.onplaying = () => { showLoading(false); showBuffering(false); };
+  v.onplaying = () => {
+    console.log(`[video] playing event`);
+    showLoading(false);
+    showBuffering(false);
+  };
 
   // waiting/stalled = bufor się wyczerpał w trakcie odtwarzania
-  v.onwaiting = () => showBuffering(true);
-  v.onstalled = () => showBuffering(true);
+  v.onwaiting = () => { console.log(`[video] waiting event`); showBuffering(true); };
+  v.onstalled = () => { console.log(`[video] stalled event`); showBuffering(true); };
 
   v.onerror = () => {
+    console.error(`[video] error event:`, v.error?.message || 'unknown');
     showLoading(false);
     showBuffering(false);
     toast('Błąd odtwarzania strumienia wideo', 'error');
@@ -1246,6 +1261,7 @@ function escHtml(str) {
 }
 
 function toast(msg, type = 'info') {
+  console.log(`[toast] ${type.toUpperCase()}: ${msg}`);
   const container = document.getElementById('toastContainer');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
