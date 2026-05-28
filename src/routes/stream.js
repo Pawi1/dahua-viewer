@@ -17,8 +17,9 @@ router.post('/start', (req, res) => {
   let inputArgs, logDesc;
   if (filePath) {
     const safePath = filePath.replace(/\.\./g, '');
-    const inputUrl = `http://127.0.0.1:${cfg.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
-    inputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
+    // RTSP file URL: NVR demuxes DHAV server-side → wysyła standard H.264 bez data partitioning
+    const inputUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}${safePath}`;
+    inputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
     logDesc = safePath;
   } else if (channel && startTime && endTime) {
     const st = toRtspTime(startTime);
