@@ -42,6 +42,7 @@ router.post('/start', (req, res) => {
     ...inputArgs,
     '-vf', 'scale=1280:-2,format=yuv420p',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '18',
+    '-keyint', '50', '-keyint_min', '5', '-scenecut', '0',
     '-profile:v', 'baseline', '-level', '4.1',
     '-avoid_negative_ts', 'make_zero',
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
