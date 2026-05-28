@@ -68,12 +68,13 @@ router.get('/video', async (req, res) => {
   const job = streamStore.get(token);
   if (!job) return res.status(404).json({ error: 'Nieznany token strumienia' });
 
-  const PREBUFFER = 10 * 1024 * 1024; // ~40s przy 2.4Mbit/s — duży bufor dla speed=1.0
-  const ready = await waitForFileBytes(job.outFile, PREBUFFER, 90000);
-  if (!ready && !fs.existsSync(job.outFile)) {
+  // Czekaj na mały startup buffer (256KB = ~1s przy 2.4Mbps), potem wysyłaj stream
+  await waitForFileBytes(job.outFile, 256 * 1024, 30000);
+  if (!fs.existsSync(job.outFile)) {
     return res.status(503).json({ error: 'FFmpeg nie zdążył przygotować danych' });
   }
 
+  // Nie wysyłamy Content-Length — to rosnący plik, przeglądarka buforuje w tle
   res.writeHead(200, {
     'Content-Type':  'video/mp4',
     'Cache-Control': 'no-store',
