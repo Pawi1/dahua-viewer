@@ -17,9 +17,8 @@ router.post('/start', (req, res) => {
   let inputArgs, logDesc;
   if (filePath) {
     const safePath = filePath.replace(/\.\./g, '');
-    // RTSP file URL: NVR demuxes DHAV server-side → wysyła standard H.264 bez data partitioning
-    const inputUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}${safePath}`;
-    inputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
+    const inputUrl = `http://127.0.0.1:${cfg.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
+    inputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
     logDesc = safePath;
   } else if (channel && startTime && endTime) {
     const st = toRtspTime(startTime);
@@ -36,10 +35,16 @@ router.post('/start', (req, res) => {
 
   console.log(`[stream:${token}] start → ${logDesc}`);
 
+  // Dahua DHAV files use H.264 data partitioning (NAL 2/3/4) which FFmpeg copy mode
+  // cannot pass through cleanly. Transcode to standard H.264 so error concealment applies.
+  const videoCodec = filePath
+    ? ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-g', '50', '-sc_threshold', '0']
+    : ['-c:v', 'copy'];
+
   const ff = spawn('ffmpeg', [
     '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
-    '-c:v', 'copy',
+    ...videoCodec,
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
     '-frag_duration', '1000000',
