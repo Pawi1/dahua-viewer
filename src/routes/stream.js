@@ -41,9 +41,9 @@ router.post('/start', (req, res) => {
     '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
     '-vf', 'scale=1280:-2,format=yuv420p',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '20',
-    '-profile:v', 'baseline', '-level', '4.1',
-    '-g', '50',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
+    '-profile:v', 'baseline', '-level', '3.1',
+    '-force_key_frames', 'expr:gte(t,n_forced*1)',
     '-avoid_negative_ts', 'make_zero',
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
@@ -62,6 +62,20 @@ router.post('/start', (req, res) => {
   });
 
   res.json({ success: true, token, streamUrl: `/api/stream/video?token=${token}`, mediaType: 'video/mp4' });
+});
+
+router.get('/status/:token', (req, res) => {
+  const { token } = req.params;
+  const job = streamStore.get(token);
+  if (!job) return res.status(404).json({ error: 'Nieznany token' });
+
+  res.json({
+    token,
+    running: job.endedAt === null,
+    size: fileSize(job.outFile),
+    startedAt: new Date(job.startedAt).toISOString(),
+    endedAt: job.endedAt ? new Date(job.endedAt).toISOString() : null,
+  });
 });
 
 router.get('/video', async (req, res) => {
