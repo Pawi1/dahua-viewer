@@ -40,9 +40,10 @@ router.post('/start', (req, res) => {
   const ff = spawn('ffmpeg', [
     '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
-    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
-    '-profile:v', 'baseline', '-level', '4.0',
-    '-pix_fmt', 'yuv420p', '-avoid_negative_ts', 'make_zero',
+    '-vf', 'scale=\'min(1920,iw):-2\',format=yuv420p',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+    '-profile:v', 'baseline', '-level', '4.1',
+    '-avoid_negative_ts', 'make_zero',
     '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
     '-frag_duration', '1000000',
@@ -88,8 +89,7 @@ router.get('/video', async (req, res) => {
     if (size > pos) {
       await new Promise(resolve => {
         const rs = fs.createReadStream(job.outFile, { start: pos, end: size - 1 });
-        rs.on('data', chunk => { if (!res.write(chunk)) rs.pause(); });
-        res.on('drain', () => rs.resume());
+        rs.pipe(res, { end: false });
         rs.on('end', resolve);
         rs.on('error', resolve);
       });
