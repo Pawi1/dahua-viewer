@@ -40,7 +40,7 @@ router.post('/start', (req, res) => {
   const ff = spawn('ffmpeg', [
     '-hide_banner', '-loglevel', 'info',
     ...inputArgs,
-    '-vf', 'scale=\'min(1920,iw):-2\',format=yuv420p',
+    '-vf', 'scale=1280:-2,format=yuv420p',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
     '-profile:v', 'baseline', '-level', '4.1',
     '-avoid_negative_ts', 'make_zero',
