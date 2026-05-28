@@ -2,6 +2,7 @@
 
 const express = require('express');
 const path    = require('path');
+const { spawn, execSync } = require('child_process');
 
 const cfg      = require('./src/config');
 const search   = require('./src/routes/search');
@@ -11,6 +12,21 @@ const nvr      = require('./src/routes/nvr');
 const proxy    = require('./src/routes/proxy');
 const { apiRouter: shareApi, pageRouter: sharePage } = require('./src/routes/share');
 const startCleanupJob = require('./src/jobs/cleanup');
+
+// Uruchom go2rtc jako subprocess
+function startGo2rtc() {
+  const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
+  const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
+           || 'go2rtc';
+  const cfg  = path.join(__dirname, 'go2rtc.yaml');
+  const proc = spawn(bin, ['-config', cfg], { stdio: ['ignore', 'pipe', 'pipe'] });
+  proc.stdout.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
+  proc.stderr.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
+  proc.on('close', code => console.log(`[go2rtc] zakończył (kod: ${code})`));
+  proc.on('error', err  => console.error(`[go2rtc] błąd startu:`, err.message));
+  return proc;
+}
+startGo2rtc();
 
 const app = express();
 app.use(express.json());

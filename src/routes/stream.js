@@ -1,131 +1,66 @@
 'use strict';
 const { Router } = require('express');
-const { spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+const express = require('express');
 const cfg = require('../config');
 const streamStore = require('../services/streamStore');
+const go2rtc = require('../services/go2rtcApi');
 const { genToken } = require('../utils/tokens');
 const { toRtspTime } = require('../utils/dahua');
-const { fileSize, sleep, waitForFileBytes } = require('../utils/files');
 
 const router = Router();
 
-router.post('/start', (req, res) => {
+router.post('/start', async (req, res) => {
   const { channel, startTime, endTime, filePath } = req.body;
 
-  let inputArgs, logDesc;
+  let rtspUrl, logDesc;
   if (channel && startTime && endTime) {
-    // RTSP cam/playback: NVR dekoduje DHAV po swojej stronie — omija data partitioning
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
-    const inputUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
-    inputArgs = ['-fflags', '+genpts', '-rtsp_transport', 'tcp', '-i', inputUrl];
+    rtspUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
     logDesc = `ch${channel} ${st}→${et}`;
   } else if (filePath) {
-    // Fallback gdy brak czasu — surowy DHAV przez HTTP proxy
     const safePath = filePath.replace(/\.\./g, '');
-    const inputUrl = `http://127.0.0.1:${cfg.port}/nvr-proxy/cgi-bin/RPC_Loadfile${safePath}`;
-    inputArgs = ['-fflags', '+genpts', '-err_detect', 'ignore_err', '-f', 'dhav', '-i', inputUrl];
+    rtspUrl = `http://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
     logDesc = safePath;
   } else {
     return res.status(400).json({ success: false, error: 'Brak parametrów' });
   }
 
   const token = genToken(16);
-  const outFile = path.join(cfg.tmpDir, `${token}.mp4`);
-
   console.log(`[stream:${token}] start → ${logDesc}`);
 
-  const ff = spawn('ffmpeg', [
-    '-hide_banner', '-loglevel', 'info',
-    ...inputArgs,
-    '-vf', 'scale=1280:-2,format=yuv420p',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
-    '-profile:v', 'baseline', '-level', '3.1',
-    '-force_key_frames', 'expr:gte(t,n_forced*1)',
-    '-avoid_negative_ts', 'make_zero',
-    '-c:a', 'aac', '-b:a', '64k', '-ac', '1',
-    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-    '-frag_duration', '1000000',
-    '-f', 'mp4', outFile,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-  const job = { ff, outFile, startedAt: Date.now(), endedAt: null, logDesc };
-  streamStore.set(token, job);
-
-  ff.stderr.on('data', d => process.stdout.write(`[ffmpeg:${token}] ${d}`));
-  ff.on('error', err => console.error(`[stream:${token}] spawn error:`, err.message));
-  ff.on('close', (code) => {
-    job.endedAt = Date.now();
-    console.log(`[stream:${token}] FFmpeg zakończył (kod: ${code})`);
-  });
-
-  res.json({ success: true, token, streamUrl: `/api/stream/video?token=${token}`, mediaType: 'video/mp4' });
+  try {
+    await go2rtc.createStream(token, `ffmpeg:${rtspUrl}#video=h264#width=1280#height=720`);
+    streamStore.set(token, { rtspUrl, startedAt: Date.now(), endedAt: null, logDesc });
+    res.json({ success: true, token });
+  } catch (err) {
+    console.error(`[stream:${token}] go2rtc error:`, err.message);
+    res.status(500).json({ success: false, error: 'Nie można uruchomić strumienia' });
+  }
 });
 
-router.get('/status/:token', (req, res) => {
-  const { token } = req.params;
-  const job = streamStore.get(token);
-  if (!job) return res.status(404).json({ error: 'Nieznany token' });
-
-  res.json({
-    token,
-    running: job.endedAt === null,
-    size: fileSize(job.outFile),
-    startedAt: new Date(job.startedAt).toISOString(),
-    endedAt: job.endedAt ? new Date(job.endedAt).toISOString() : null,
-  });
-});
-
-router.get('/video', async (req, res) => {
+// WebRTC SDP offer proxy → go2rtc
+router.post('/offer', express.text({ type: '*/*' }), async (req, res) => {
   const { token } = req.query;
-  const job = streamStore.get(token);
-  if (!job) return res.status(404).json({ error: 'Nieznany token strumienia' });
+  if (!streamStore.get(token)) return res.status(404).send('Nieznany token');
 
-  // Czekaj na mały startup buffer (256KB = ~1s przy 2.4Mbps), potem wysyłaj stream
-  await waitForFileBytes(job.outFile, 256 * 1024, 30000);
-  if (!fs.existsSync(job.outFile)) {
-    return res.status(503).json({ error: 'FFmpeg nie zdążył przygotować danych' });
+  try {
+    const answer = await go2rtc.webrtcOffer(token, req.body);
+    res.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+    res.send(answer);
+  } catch (err) {
+    console.error(`[stream] WebRTC offer error:`, err.message);
+    res.status(500).send('Błąd WebRTC');
   }
-
-  // Nie wysyłamy Content-Length — to rosnący plik, przeglądarka buforuje w tle
-  res.writeHead(200, {
-    'Content-Type':  'video/mp4',
-    'Cache-Control': 'no-store',
-    'Accept-Ranges': 'none',
-  });
-
-  let pos = 0;
-  let closed = false;
-  req.on('close', () => { closed = true; });
-
-  while (!closed) {
-    const size = fileSize(job.outFile);
-    if (size > pos) {
-      await new Promise(resolve => {
-        const rs = fs.createReadStream(job.outFile, { start: pos, end: size - 1 });
-        rs.pipe(res, { end: false });
-        rs.on('end', resolve);
-        rs.on('error', resolve);
-      });
-      pos = size;
-    } else {
-      if (job.endedAt !== null) break;
-      await sleep(150);
-    }
-  }
-
-  if (!res.writableEnded) res.end();
-  console.log(`[stream:${token}] Klient odłączył się (pos=${pos})`);
 });
 
-router.post('/stop', (req, res) => {
+router.post('/stop', async (req, res) => {
   const { token } = req.body;
   const job = streamStore.get(token);
-  if (job && job.endedAt === null) {
-    job.ff.kill('SIGTERM');
-    console.log(`[stream:${token}] stop requested`);
+  if (job) {
+    await go2rtc.deleteStream(token);
+    job.endedAt = Date.now();
+    console.log(`[stream:${token}] stop`);
   }
   res.json({ success: true });
 });

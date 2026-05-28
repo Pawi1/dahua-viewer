@@ -871,6 +871,8 @@
 let currentToken = null;
 let currentFile  = null;
 let currentChannel = 1;
+let currentMSEController = null;
+let currentRTCPeer = null;
 let searchResults = [];
 const videoEl = () => document.getElementById('main-player');
 
@@ -1028,25 +1030,6 @@ function renderResults(found, files) {
   listEl.innerHTML = html;
 }
 
-async function waitUntilBufferedOnServer(token) {
-  const minBytes = 256 * 1024; // 256KB prebuffer
-  const start = Date.now();
-  const timeout = 60000; // 60s timeout
-
-  while (Date.now() - start < timeout) {
-    try {
-      const r = await fetch(`/api/stream/status/${token}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error('status endpoint failed');
-      const data = await r.json();
-      console.log(`[buffer-wait] size=${(data.size || 0) / 1024 | 0}KB, running=${data.running}`);
-      if (data.size >= minBytes || !data.running) return;
-    } catch (e) {
-      console.error(`[buffer-wait] error:`, e.message);
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  console.log(`[buffer-wait] timeout, starting anyway`);
-}
 
 async function selectFile(idx) {
   document.querySelectorAll('.file-card').forEach(c => c.classList.remove('active'));
@@ -1061,30 +1044,23 @@ async function playFile(idx) {
   if (currentToken) await stopStream(true);
 
   currentFile = file;
-  console.log(`[playFile] Starting: idx=${idx}, ch=${currentChannel}, time=${file.startTime}→${file.endTime}`);
-  showLoading(true, 'Buforowanie nagrania...', 'Trwa wczytywanie ~15s nagrania, proszę czekać...');
+  console.log(`[playFile] ch${currentChannel} ${file.startTime}→${file.endTime}`);
+  showLoading(true, 'Łączenie WebRTC...', 'Nawiązywanie połączenia z kamerą...');
 
   try {
     const body = { channel: currentChannel, startTime: file.startTime, endTime: file.endTime };
     if (file.filePath) body.filePath = file.filePath;
 
-    console.log(`[playFile] Fetching /api/stream/start with:`, body);
     const r = await fetch('/api/stream/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await r.json();
-    console.log(`[playFile] Response:`, data);
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
 
     currentToken = data.token;
-    console.log(`[playFile] Token received: ${currentToken}, URL: ${data.streamUrl}`);
-
-    // Wait for server to buffer like prototype does
-    await waitUntilBufferedOnServer(currentToken);
-
-    showPlayer(data.streamUrl, data.mediaType || 'video/mp4', file);
+    await showPlayer(data.token, file);
   } catch (err) {
     console.error(`[playFile] Error:`, err.message);
     showLoading(false);
@@ -1092,71 +1068,83 @@ async function playFile(idx) {
   }
 }
 
-function showPlayer(streamUrl, mediaType, file) {
-  console.log(`[showPlayer] streamUrl=${streamUrl}, mediaType=${mediaType}`);
+async function showPlayer(token, file) {
+  console.log(`[showPlayer] WebRTC token=${token}`);
   document.getElementById('playerIdle').style.display = 'none';
 
   const v = videoEl();
   v.style.display = 'block';
+  v.oncanplay = null; v.onplaying = null; v.onwaiting = null; v.onstalled = null; v.onerror = null;
 
-  // Wyczyść poprzednie listenery
-  v.oncanplay = null;
-  v.onplaying = null;
-  v.onwaiting = null;
-  v.onstalled = null;
-  v.onerror   = null;
+  if (currentMSEController) { currentMSEController.abort(); currentMSEController = null; }
+  if (currentRTCPeer) { currentRTCPeer.close(); currentRTCPeer = null; }
 
-  v.src = streamUrl;
-  console.log(`[showPlayer] Setting src=${streamUrl}, calling load()`);
-  v.load();
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+  currentRTCPeer = pc;
 
-  // Log stats periodically during loading
-  const statsInterval = setInterval(() => {
-    if (!v.src) { clearInterval(statsInterval); return; }
-    logVideoStats('[periodic]');
-  }, 2000);
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
 
-  // canplay odpala dla streamingu (w odróżnieniu od canplaythrough który wymaga EOF)
+  pc.ontrack = (e) => {
+    console.log('[WebRTC] track:', e.track.kind);
+    if (e.track.kind === 'video') v.srcObject = e.streams[0];
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log('[WebRTC] ICE:', pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') toast('Błąd połączenia WebRTC', 'error');
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  // Czekaj na zebranie ICE candidates (max 3s)
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    const check = () => {
+      if (pc.iceGatheringState === 'complete') {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    };
+    pc.addEventListener('icegatheringstatechange', check);
+    setTimeout(resolve, 3000);
+  });
+
+  const resp = await fetch(`/api/stream/offer?token=${token}`, {
+    method: 'POST',
+    body: pc.localDescription.sdp,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  if (!resp.ok) throw new Error(`WebRTC offer failed: ${resp.status}`);
+
+  const sdpAnswer = await resp.text();
+  await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
+  console.log('[WebRTC] SDP exchange done');
+
   v.oncanplay = () => {
-    logVideoStats('[canplay]');
-    v.play().catch(e => console.error(`[video] play() failed:`, e.message));
+    console.log('[video] canplay');
+    v.play().catch(e => console.error('[video] play() failed:', e.message));
   };
-
-  // playing = pierwsza klatka wyrenderowana → chowamy overlay
-  v.onplaying = () => {
-    logVideoStats('[playing]');
-    showLoading(false);
-    showBuffering(false);
-  };
-
-  // waiting/stalled = bufor się wyczerpał w trakcie odtwarzania
-  v.onwaiting = () => { logVideoStats('[waiting]'); showBuffering(true); };
-  v.onstalled = () => { logVideoStats('[stalled]'); showBuffering(true); };
-
-  // progress = nowe dane się załadowały
-  v.onprogress = () => { logVideoStats('[progress]'); };
-
-  // loadedmetadata = znamy duration/width/height/codec
-  v.onloadedmetadata = () => {
-    console.log(`[video] loadedmetadata: ${v.videoWidth}x${v.videoHeight}, duration=${isFinite(v.duration) ? v.duration.toFixed(1) + 's' : 'unknown'}`);
-    logVideoStats('[loadedmetadata]');
-  };
-
+  v.onplaying = () => { showLoading(false); showBuffering(false); };
+  v.onwaiting = () => showBuffering(true);
+  v.onstalled = () => showBuffering(true);
+  v.onloadedmetadata = () => console.log(`[video] ${v.videoWidth}x${v.videoHeight}`);
   v.onerror = () => {
-    console.error(`[video] error event:`, v.error?.message || 'unknown');
-    showLoading(false);
-    showBuffering(false);
-    toast('Błąd odtwarzania strumienia wideo', 'error');
+    console.error('[video] error:', v.error?.message);
+    showLoading(false); showBuffering(false);
+    toast('Błąd odtwarzania wideo', 'error');
   };
 
   document.getElementById('playerToolbar').style.display = 'flex';
   document.getElementById('playerTitle').textContent =
     `Kanał ${currentChannel}  ·  ${formatTime(file.startTime)} → ${formatTime(file.endTime)}`;
   document.getElementById('playerSub').textContent =
-    file.filePath ? file.filePath.split('/').pop() : `${file.type.toUpperCase()} · MP4 stream`;
+    `${file.filePath ? file.filePath.split('/').pop() : file.type.toUpperCase()} · WebRTC`;
 
-  // Fallback: 90s = czas na 5MB prebuffer (~20s) + margines
-  setTimeout(() => showLoading(false), 90000);
+  setTimeout(() => showLoading(false), 30000);
 }
 
 function showBuffering(show) {
@@ -1186,10 +1174,13 @@ function logVideoStats(prefix = '') {
 async function stopStream(silent = false) {
   if (!currentToken) return;
 
+  if (currentMSEController) { currentMSEController.abort(); currentMSEController = null; }
+  if (currentRTCPeer) { currentRTCPeer.close(); currentRTCPeer = null; }
+
   const v = videoEl();
   v.pause();
+  v.srcObject = null;
   v.src = '';
-  v.load();
 
   try {
     await fetch('/api/stream/stop', {

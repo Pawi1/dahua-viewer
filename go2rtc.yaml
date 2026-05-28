@@ -1,0 +1,22 @@
+api:
+  listen: "127.0.0.1:1984"
+
+ffmpeg:
+  bin: "ffmpeg"
+  h264: "-vf scale=-2:480 -threads 4 -codec:v libx264 -preset ultrafast -tune zerolatency -crf 26"
+
+webrtc:
+  ice_servers:
+    - urls: [stun:stun.l.google.com:19302]
+
+log:
+  level: info
+streams:
+  c0da9cc1ff9b38c6d4dc708c7bfa4025:
+    - ffmpeg:rtsp://admin:Admin%40123@192.168.1.55:554/cam/playback?channel=1&starttime=2026_05_28_13_25_50&endtime=2026_05_28_14_00_00#video=h264&width=1280&height=720
+  ca3a0a986a27845b27aba3ca1d2770eb:
+    - ffmpeg:rtsp://admin:Admin%40123@192.168.1.55:554/cam/playback?channel=1&starttime=2026_05_28_13_25_50&endtime=2026_05_28_14_00_00#video=h264
+  efd9547d7da165ff41fe07964040327d:
+    - ffmpeg:rtsp://admin:Admin%40123@192.168.1.55:554/cam/playback?channel=1&starttime=2026_05_28_13_25_50&endtime=2026_05_28_14_00_00#video=h264#width=1280#height=720
+  5b22ac4e1601cf6dedf5292229f6e6da:
+    - ffmpeg:rtsp://admin:Admin%40123@192.168.1.55:554/cam/playback?channel=1&starttime=2026_05_28_13_25_50&endtime=2026_05_28_14_00_00#video=h264#width=1280#height=720
