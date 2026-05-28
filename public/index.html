@@ -1080,22 +1080,31 @@ function showPlayer(streamUrl, mediaType, file) {
   console.log(`[showPlayer] Setting src=${streamUrl}, calling load()`);
   v.load();
 
+  // Log stats periodically during loading
+  const statsInterval = setInterval(() => {
+    if (!v.src) { clearInterval(statsInterval); return; }
+    logVideoStats('[periodic]');
+  }, 2000);
+
   // canplay odpala dla streamingu (w odróżnieniu od canplaythrough który wymaga EOF)
   v.oncanplay = () => {
-    console.log(`[video] canplay event`);
+    logVideoStats('[canplay]');
     v.play().catch(e => console.error(`[video] play() failed:`, e.message));
   };
 
   // playing = pierwsza klatka wyrenderowana → chowamy overlay
   v.onplaying = () => {
-    console.log(`[video] playing event`);
+    logVideoStats('[playing]');
     showLoading(false);
     showBuffering(false);
   };
 
   // waiting/stalled = bufor się wyczerpał w trakcie odtwarzania
-  v.onwaiting = () => { console.log(`[video] waiting event`); showBuffering(true); };
-  v.onstalled = () => { console.log(`[video] stalled event`); showBuffering(true); };
+  v.onwaiting = () => { logVideoStats('[waiting]'); showBuffering(true); };
+  v.onstalled = () => { logVideoStats('[stalled]'); showBuffering(true); };
+
+  // progress = nowe dane się załadowały
+  v.onprogress = () => { logVideoStats('[progress]'); };
 
   v.onerror = () => {
     console.error(`[video] error event:`, v.error?.message || 'unknown');
@@ -1116,6 +1125,26 @@ function showPlayer(streamUrl, mediaType, file) {
 
 function showBuffering(show) {
   document.getElementById('bufferingOverlay').classList.toggle('hidden', !show);
+}
+
+function logVideoStats(prefix = '') {
+  const v = videoEl();
+  if (!v.src) return;
+
+  const duration = v.duration;
+  const current = v.currentTime;
+  const buffered = v.buffered.length > 0 ? v.buffered.end(v.buffered.length - 1) : 0;
+  const bufferAhead = Math.max(0, buffered - current);
+  const durStr = isFinite(duration) ? `${duration.toFixed(1)}s` : 'unknown';
+  const currStr = `${current.toFixed(2)}s`;
+  const buffStr = `${buffered.toFixed(2)}s`;
+  const aheadStr = `${bufferAhead.toFixed(2)}s`;
+
+  const readyStates = ['HAVE_NOTHING', 'HAVE_METADATA', 'HAVE_CURRENT_DATA', 'HAVE_FUTURE_DATA', 'HAVE_ENOUGH_DATA'];
+  const netStates = ['NETWORK_EMPTY', 'NETWORK_IDLE', 'NETWORK_LOADING', 'NETWORK_NO_SOURCE'];
+
+  const msg = `${prefix} | dur=${durStr} curr=${currStr} buf=${buffStr} ahead=${aheadStr} ready=${readyStates[v.readyState]} net=${netStates[v.networkState]}`;
+  console.log(`[video-stats] ${msg}`);
 }
 
 async function stopStream(silent = false) {
