@@ -33,6 +33,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
 app.use('/api/search',   search);
 app.use('/api/stream',   stream);
 app.use('/api/download', download);

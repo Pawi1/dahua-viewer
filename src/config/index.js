@@ -12,4 +12,5 @@ module.exports = {
   shareTtlH: parseInt(process.env.SHARE_TTL_H  || '72'),
   secretKey: process.env.SECRET_KEY   || crypto.randomBytes(32).toString('hex'),
   tmpDir:    process.env.OUT_DIR       || '/tmp/dahua_viewer',
+  debug:     ['true','1','yes'].includes((process.env.DEBUG || '').toLowerCase()),
 };
