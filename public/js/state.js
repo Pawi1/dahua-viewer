@@ -6,6 +6,7 @@ export const state = {
   currentMSEController: null,
   searchResults:        [],
   heartbeatInterval:    null,
+  currentResolution:    '480p',
 };
 
 export const videoEl = () => document.getElementById('main-player');

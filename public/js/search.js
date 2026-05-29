@@ -23,7 +23,7 @@ export async function searchRecordings() {
     const r = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, startTime, endTime })
+      body: JSON.stringify({ channel, startTime, endTime, resolution: state.currentResolution })
     });
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Błąd wyszukiwania');
@@ -101,7 +101,7 @@ export async function playFile(idx) {
   showLoading(true, 'Łączenie WebRTC...', 'Nawiązywanie połączenia z kamerą...');
 
   try {
-    const body = { channel: state.currentChannel, startTime: file.startTime, endTime: file.endTime };
+    const body = { channel: state.currentChannel, startTime: file.startTime, endTime: file.endTime, resolution: state.currentResolution };
     if (file.filePath) body.filePath = file.filePath;
 
     const r = await fetch('/api/stream/start', {
@@ -176,7 +176,7 @@ export async function playAtTime() {
     const r = await fetch('/api/stream/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, startTime: wantedTime, endTime: file.endTime })
+      body: JSON.stringify({ channel, startTime: wantedTime, endTime: file.endTime, resolution: state.currentResolution })
     });
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
@@ -204,7 +204,7 @@ export async function playLive() {
     const r = await fetch('/api/stream/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, startTime, endTime })
+      body: JSON.stringify({ channel, startTime, endTime, resolution: state.currentResolution })
     });
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');

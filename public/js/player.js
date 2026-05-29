@@ -2,7 +2,43 @@ import { state, videoEl } from './state.js';
 import { toast, showLoading, showBuffering } from './ui.js';
 import { formatTime, toDahuaTime, toDatetimeLocal } from './utils.js';
 import { log, err } from './logger.js';
-import { initSeekbar, destroySeekbar, updateSeekbarOrigin } from './seekbar.js';
+import { initSeekbar, destroySeekbar, updateSeekbarOrigin, getCurrentPosSecs, getRecStart } from './seekbar.js';
+
+export async function changeResolution(resolution) {
+  if (!state.currentToken || !state.currentFile) return;
+  state.currentResolution = resolution;
+
+  const file     = state.currentFile;
+  const recStart = getRecStart();
+  const posSecs  = getCurrentPosSecs();
+  const startTime = recStart
+    ? toDahuaTime(toDatetimeLocal(new Date(recStart.getTime() + posSecs * 1000)))
+    : file.startTime;
+
+  showLoading(true, 'Zmiana rozdzielczości...', resolution);
+
+  try {
+    await fetch('/api/stream/stop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: state.currentToken })
+    });
+    if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
+
+    const r = await fetch('/api/stream/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: state.currentChannel, startTime, endTime: file.endTime, resolution })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error);
+    state.currentToken = data.token;
+    startHeartbeat(data.token);
+    updateSeekbarOrigin(startTime);
+    await showPlayer(data.token, { ...file, startTime }, { keepSeekbar: true });
+  } catch (e) {
+    err('[changeResolution] error:', e.message);
+    showLoading(false);
+  }
+}
 
 export function startHeartbeat(token) {
   stopHeartbeat();
@@ -91,7 +127,7 @@ export async function showPlayer(token, file, { keepSeekbar = false } = {}) {
 
         const r = await fetch('/api/stream/start', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel: state.currentChannel, startTime: seekTime, endTime: file.endTime })
+          body: JSON.stringify({ channel: state.currentChannel, startTime: seekTime, endTime: file.endTime, resolution: state.currentResolution })
         });
         const data = await r.json();
         if (!data.success) throw new Error(data.error);

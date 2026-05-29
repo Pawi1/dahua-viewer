@@ -4,7 +4,7 @@ fetch('/api/config').then(r => r.json()).then(c => { window.DEBUG = c.debug; }).
 
 import { initClock, initDefaultTimes, toast } from './ui.js';
 import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive } from './search.js';
-import { showPlayer, stopStream } from './player.js';
+import { showPlayer, stopStream, changeResolution } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
 import { openFragmentPanel, closeFragmentPanel, downloadFragment } from './fragment.js';
 
@@ -16,6 +16,7 @@ window.playFile          = playFile;
 window.downloadFile      = downloadFile;
 window.downloadCurrent   = downloadCurrent;
 window.stopStream        = stopStream;
+window.changeResolution  = changeResolution;
 window.playAtTime        = playAtTime;
 window.playLive          = playLive;
 window.openFragmentPanel  = openFragmentPanel;

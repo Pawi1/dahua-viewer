@@ -10,7 +10,10 @@ const { toRtspTime } = require('../utils/dahua');
 const router = Router();
 
 router.post('/start', async (req, res) => {
-  const { channel, startTime, endTime, filePath } = req.body;
+  const { channel, startTime, endTime, filePath, resolution } = req.body;
+
+  const PROFILES = { '480p': 'h264_480p', '720p': 'h264_720p', '1080p': 'h264_1080p', 'native': 'h264_native' };
+  const profile  = PROFILES[resolution] || 'h264_480p';
 
   let rtspUrl, logDesc, go2rtcSrc;
 
@@ -18,12 +21,12 @@ router.post('/start', async (req, res) => {
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
     rtspUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
-    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264#hardware`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=${profile}#hardware`;
     logDesc = `ch${channel} ${st}→${et}`;
   } else if (filePath) {
     const safePath = filePath.replace(/\.\./g, '');
     rtspUrl = `http://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
-    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264#hardware`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=${profile}#hardware`;
     logDesc = safePath;
   } else {
     return res.status(400).json({ success: false, error: 'Brak parametrów' });

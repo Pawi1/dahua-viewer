@@ -279,6 +279,25 @@ main { grid-area: main; display: flex; flex-direction: column; overflow: hidden;
 .player-info-title { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-info-sub { font-size: 10px; color: var(--text2); margin-top: 2px; font-family: var(--mono); }
 .toolbar-actions { display: flex; gap: 8px; align-items: center; }
+.toolbar-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+.res-select {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text1);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 22px 4px 8px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%239ca3af'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: border-color .15s;
+}
+.res-select:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ─── LOADING OVERLAY ────────────────────────────────────── */
 .loading-overlay {
