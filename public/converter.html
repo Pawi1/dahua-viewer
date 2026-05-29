@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Konwerter DAV → MP4 · NVR Viewer</title>
+  <style>
+    :root {
+      --bg0: #eef0f5; --bg1: #fff; --bg2: #f5f7fa;
+      --border: #d8dde8; --accent: #c8001e; --accent-s: rgba(200,0,30,.08);
+      --ok: #16a34a; --text0: #111318; --text1: #4b5768; --text2: #9ca3af;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+      --radius: 4px; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sans); background: var(--bg0); color: var(--text0); min-height: 100vh; font-size: 13px; -webkit-font-smoothing: antialiased; }
+
+    header {
+      background: var(--bg1); border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 56px; display: flex; align-items: center; gap: 16px;
+      position: relative;
+    }
+    header::before { content: ''; position: absolute; top:0; left:0; right:0; height:3px; background: var(--accent); }
+    .logo-product { font-size: 15px; font-weight: 700; }
+    .logo-sub { font-size: 10px; color: var(--text2); letter-spacing: 2px; text-transform: uppercase; }
+    .back-link { margin-left: auto; font-size: 12px; color: var(--text2); text-decoration: none; }
+    .back-link:hover { color: var(--accent); }
+
+    main { max-width: 640px; margin: 48px auto; padding: 0 20px; }
+
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { color: var(--text2); font-size: 12px; margin-bottom: 32px; }
+
+    .card { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 20px; }
+
+    /* Drop zone */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+    }
+    .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-s); }
+    .dropzone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .dropzone-icon { font-size: 32px; margin-bottom: 12px; }
+    .dropzone-label { font-weight: 600; color: var(--text0); margin-bottom: 4px; }
+    .dropzone-hint { font-size: 11px; color: var(--text2); }
+    .dropzone.has-file { border-color: var(--ok); background: rgba(22,163,74,.05); }
+    .dropzone.has-file .dropzone-icon { color: var(--ok); }
+
+    .file-info { margin-top: 12px; font-family: var(--mono); font-size: 11px; color: var(--text1); display: none; }
+    .file-info.visible { display: block; }
+
+    /* Options */
+    .option-group { display: flex; gap: 10px; margin-top: 16px; }
+    .option-btn {
+      flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--bg2); cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .option-btn:hover { border-color: var(--accent); background: var(--accent-s); }
+    .option-btn.active { border-color: var(--accent); background: var(--accent-s); }
+    .option-btn strong { display: block; font-size: 12px; margin-bottom: 3px; }
+    .option-btn span { font-size: 10px; color: var(--text2); }
+
+    /* Progress */
+    .progress-wrap { margin-top: 20px; display: none; }
+    .progress-wrap.visible { display: block; }
+    .progress-label { font-size: 11px; color: var(--text1); margin-bottom: 8px; font-family: var(--mono); }
+    .progress-bar-outer { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .progress-bar-inner { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width .3s; }
+
+    /* Log */
+    .log-box {
+      margin-top: 12px; background: #0d0d0d; border-radius: var(--radius);
+      padding: 10px 12px; font-family: var(--mono); font-size: 10px;
+      color: #aaa; max-height: 120px; overflow-y: auto; display: none;
+      line-height: 1.6;
+    }
+    .log-box.visible { display: block; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 18px; border: none; border-radius: var(--radius);
+      cursor: pointer; font-family: var(--sans); font-weight: 600; font-size: 12px;
+      letter-spacing: 0.3px; text-transform: uppercase; transition: all .15s; white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; margin-top: 20px; justify-content: center; }
+    .btn-primary:hover:not(:disabled) { background: #a80019; }
+    .btn-success { background: var(--ok); color: #fff; width: 100%; margin-top: 12px; }
+    .btn-success:hover { background: #15803d; }
+
+    .result-box { display: none; text-align: center; }
+    .result-box.visible { display: block; }
+    .result-size { font-size: 11px; color: var(--text2); margin-top: 6px; font-family: var(--mono); }
+
+    .badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; background: var(--accent-s); color: var(--accent); border: 1px solid rgba(200,0,30,.2); border-radius: 2px; padding: 2px 6px; margin-left: 8px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo-product">NVR Viewer <span class="badge">Konwerter</span></div>
+    <div class="logo-sub">DAV → MP4</div>
+  </div>
+  <a href="/" class="back-link">← Powrót do aplikacji</a>
+</header>
+
+<main>
+  <h1>Konwerter DAV → MP4</h1>
+  <p class="subtitle">Konwersja odbywa się w przeglądarce — plik nie jest przesyłany na serwer.</p>
+
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".dav">
+      <div class="dropzone-icon">📂</div>
+      <div class="dropzone-label">Przeciągnij plik .dav lub kliknij aby wybrać</div>
+      <div class="dropzone-hint">Obsługiwane: Dahua DAV (H.264, H.265)</div>
+    </div>
+    <div class="file-info" id="fileInfo"></div>
+
+    <div class="option-group">
+      <div class="option-btn active" id="optCopy" onclick="selectMode('copy')">
+        <strong>Szybka</strong>
+        <span>Kopiuj strumień (bez transkodowania)</span>
+      </div>
+      <div class="option-btn" id="optTranscode" onclick="selectMode('transcode')">
+        <strong>Kompatybilna H.264</strong>
+        <span>Transkoduj (dłużej, działa wszędzie)</span>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label" id="progressLabel">Ładowanie FFmpeg.wasm…</div>
+      <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div></div>
+    </div>
+
+    <div class="log-box" id="logBox"></div>
+
+    <button class="btn btn-primary" id="convertBtn" onclick="startConvert()" disabled>
+      Konwertuj
+    </button>
+  </div>
+
+  <div class="card result-box" id="resultBox">
+    <div style="font-size:32px;margin-bottom:12px">✅</div>
+    <div style="font-weight:700;margin-bottom:4px">Konwersja zakończona</div>
+    <a class="btn btn-success" id="downloadBtn">↓ Pobierz MP4</a>
+    <div class="result-size" id="resultSize"></div>
+  </div>
+</main>
+
+<script type="module">
+const CORE_BASE = '/ffmpeg/core';
+
+let ffmpeg   = null;
+let file     = null;
+let mode     = 'copy'; // 'copy' | 'transcode'
+let ffLoaded = false;
+
+const dropzone    = document.getElementById('dropzone');
+const fileInput   = document.getElementById('fileInput');
+const fileInfo    = document.getElementById('fileInfo');
+const progressWrap= document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const progressLbl = document.getElementById('progressLabel');
+const logBox      = document.getElementById('logBox');
+const convertBtn  = document.getElementById('convertBtn');
+const resultBox   = document.getElementById('resultBox');
+const downloadBtn = document.getElementById('downloadBtn');
+const resultSize  = document.getElementById('resultSize');
+
+window.selectMode = (m) => {
+  mode = m;
+  document.getElementById('optCopy').classList.toggle('active', m === 'copy');
+  document.getElementById('optTranscode').classList.toggle('active', m === 'transcode');
+};
+
+function onFile(f) {
+  if (!f) return;
+  file = f;
+  dropzone.classList.add('has-file');
+  dropzone.querySelector('.dropzone-icon').textContent = '📄';
+  dropzone.querySelector('.dropzone-label').textContent = f.name;
+  fileInfo.textContent = `Rozmiar: ${(f.size / 1024 / 1024).toFixed(2)} MB`;
+  fileInfo.classList.add('visible');
+  convertBtn.disabled = false;
+  resultBox.classList.remove('visible');
+}
+
+fileInput.addEventListener('change', e => onFile(e.target.files[0]));
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('over');
+  onFile(e.dataTransfer.files[0]);
+});
+
+function log(msg) {
+  logBox.classList.add('visible');
+  logBox.textContent += msg + '\n';
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function setProgress(pct, label) {
+  progressWrap.classList.add('visible');
+  progressBar.style.width = pct + '%';
+  if (label) progressLbl.textContent = label;
+}
+
+async function loadFFmpeg() {
+  if (ffLoaded) return;
+  const { FFmpeg } = await import('/ffmpeg/ffmpeg/index.js');
+  ffmpeg = new FFmpeg();
+  ffmpeg.on('log', ({ message }) => log(message));
+  ffmpeg.on('progress', ({ progress }) => {
+    const pct = Math.round(progress * 100);
+    setProgress(pct, `Konwersja… ${pct}%`);
+  });
+  setProgress(10, 'Pobieranie FFmpeg.wasm (~30 MB)…');
+  await ffmpeg.load({
+    coreURL: `${CORE_BASE}/ffmpeg-core.js`,
+    wasmURL: `${CORE_BASE}/ffmpeg-core.wasm`,
+  });
+  ffLoaded = true;
+  setProgress(100, 'FFmpeg.wasm gotowy');
+}
+
+window.startConvert = async () => {
+  if (!file) return;
+  convertBtn.disabled = true;
+  resultBox.classList.remove('visible');
+  logBox.textContent = '';
+  logBox.classList.remove('visible');
+  setProgress(0, 'Inicjalizacja…');
+
+  try {
+    await loadFFmpeg();
+
+    setProgress(0, 'Wczytywanie pliku…');
+    const { fetchFile } = await import('/ffmpeg/util/index.js');
+    await ffmpeg.writeFile('input.dav', await fetchFile(file));
+
+    const outName   = file.name.replace(/\.dav$/i, '') + '.mp4';
+    const videoArgs = mode === 'copy'
+      ? ['-c:v', 'copy']
+      : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23'];
+
+    setProgress(0, 'Konwersja…');
+    await ffmpeg.exec([
+      '-f', 'dhav',
+      '-i', 'input.dav',
+      ...videoArgs,
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      'output.mp4',
+    ]);
+
+    const data = await ffmpeg.readFile('output.mp4');
+    const blob = new Blob([data], { type: 'video/mp4' });
+    const url  = URL.createObjectURL(blob);
+
+    downloadBtn.href     = url;
+    downloadBtn.download = outName;
+    downloadBtn.textContent = `↓ Pobierz ${outName}`;
+    resultSize.textContent = `Rozmiar: ${(blob.size / 1024 / 1024).toFixed(2)} MB`;
+    resultBox.classList.add('visible');
+    setProgress(100, 'Zakończono!');
+
+    await ffmpeg.deleteFile('input.dav');
+    await ffmpeg.deleteFile('output.mp4');
+  } catch (err) {
+    log('BŁĄD: ' + err.message);
+    setProgress(0, 'Błąd konwersji — sprawdź log');
+  } finally {
+    convertBtn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

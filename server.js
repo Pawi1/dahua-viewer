@@ -39,6 +39,9 @@ const app = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
+app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));
+app.use('/ffmpeg/util',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/util/dist/esm')));
 
 app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
 app.use('/api/auth', auth);
