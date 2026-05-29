@@ -15,6 +15,16 @@ router.get('/info', async (req, res) => {
   }
 });
 
+router.get('/time', async (req, res) => {
+  try {
+    const r    = await dApi.get('/cgi-bin/global.cgi?action=getCurrentTime');
+    const raw  = parseKeyValue(r.data).result; // "2026-05-29 14:23:11"
+    res.json({ success: true, time: raw });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/channels', async (req, res) => {
   try {
     const r = await dApi.get('/cgi-bin/devVideoInput.cgi?action=getCollect');

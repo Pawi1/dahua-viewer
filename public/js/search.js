@@ -189,9 +189,18 @@ export async function playAtTime() {
 }
 
 export async function playLive() {
-  const channel   = parseInt(document.getElementById('channelSelect').value) || 1;
-  const startTime = toDahuaTime(toDatetimeLocal(new Date(Date.now() - 5000)));
-  const endTime   = toDahuaTime(toDatetimeLocal(new Date(Date.now() + 3 * 60 * 60 * 1000)));
+  const channel = parseInt(document.getElementById('channelSelect').value) || 1;
+
+  // Użyj czasu NVR — może różnić się od czasu przeglądarki/serwera
+  let nvrNow = new Date();
+  try {
+    const tr = await fetch('/api/nvr/time');
+    const td = await tr.json();
+    if (td.success && td.time) nvrNow = new Date(td.time.replace(' ', 'T'));
+  } catch (_) {}
+
+  const startTime = toDahuaTime(toDatetimeLocal(new Date(nvrNow.getTime() - 5000)));
+  const endTime   = toDahuaTime(toDatetimeLocal(new Date(nvrNow.getTime() + 3 * 60 * 60 * 1000)));
 
   if (state.currentToken) await stopStream(true);
 
