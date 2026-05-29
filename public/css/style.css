@@ -431,6 +431,50 @@ main { grid-area: main; display: flex; flex-direction: column; overflow: hidden;
 }
 .seekbar-track:hover .seekbar-thumb { transform: translate(-50%, -50%) scale(1); }
 
+/* ─── FRAGMENT BAR ───────────────────────────────────────── */
+.fragment-bar {
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  animation: slideDown .15s ease;
+}
+.fragment-bar.hidden { display: none; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+.fragment-inputs { display: flex; gap: 12px; align-items: flex-end; }
+.fragment-inputs .field { margin: 0; }
+.fragment-inputs input { font-size: 11px; padding: 5px 8px; }
+.fragment-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ─── SEEKBAR FRAGMENT MARKERS ───────────────────────────── */
+.seekbar-frag-region {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(255,255,255,.18);
+  border-left:  2px solid #22c55e;
+  border-right: 2px solid #f97316;
+  pointer-events: none;
+}
+.seekbar-frag-region.hidden { display: none; }
+
+.seekbar-frag-handle {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  cursor: ew-resize;
+  z-index: 5;
+}
+.seekbar-frag-handle.hidden { display: none; }
+#seekbarFragStart { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.6); }
+#seekbarFragEnd   { background: #f97316; box-shadow: 0 0 6px rgba(249,115,22,.6); }
+
 /* ─── MISC ───────────────────────────────────────────────── */
 hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 .flex { display: flex; align-items: center; gap: 8px; }

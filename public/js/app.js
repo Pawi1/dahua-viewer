@@ -6,6 +6,7 @@ import { initClock, initDefaultTimes, toast } from './ui.js';
 import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive } from './search.js';
 import { showPlayer, stopStream } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
+import { openFragmentPanel, closeFragmentPanel, downloadFragment } from './fragment.js';
 
 // Expose do window żeby działały onclick= w HTML
 window.searchRecordings  = searchRecordings;
@@ -17,7 +18,10 @@ window.downloadCurrent   = downloadCurrent;
 window.stopStream        = stopStream;
 window.playAtTime        = playAtTime;
 window.playLive          = playLive;
-window.openShareModal    = openShareModal;
+window.openFragmentPanel  = openFragmentPanel;
+window.closeFragmentPanel = closeFragmentPanel;
+window.downloadFragment   = downloadFragment;
+window.openShareModal     = openShareModal;
 window.closeShareModal   = closeShareModal;
 window.generateShareLink = generateShareLink;
 window.copyShareUrl      = copyShareUrl;
@@ -30,7 +34,7 @@ async function checkNvr() {
     const txt = document.getElementById('nvrStatusText');
     if (data.success) {
       el.className = 'nvr-status online';
-      const model = data.info['deviceType'] || data.info['model'] || 'NVR';
+      const model = data.info['updateSerial'] || data.info['deviceType'] || 'NVR';
       txt.textContent = `Online · ${model}`;
     } else throw new Error();
   } catch (_) {

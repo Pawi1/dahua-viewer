@@ -138,6 +138,78 @@ export function initSeekbar(file, onSeek) {
   tick();
 }
 
+export function getCurrentPosSecs() {
+  if (!_recStart || !_wallStart) return 0;
+  return Math.max(0, (_playStart - _recStart) / 1000 + (Date.now() - _wallStart) / 1000);
+}
+
+export function getRecStart() { return _recStart; }
+export function getRecEnd()   { return _recEnd; }
+
+let _fragStartR    = 0;
+let _fragEndR      = 1;
+let _fragOnChange  = null;
+let _fragMode      = false;
+
+function updateFragMarkers() {
+  const start = document.getElementById('seekbarFragStart');
+  const end   = document.getElementById('seekbarFragEnd');
+  const reg   = document.getElementById('seekbarFragRegion');
+  start.style.left = `${_fragStartR * 100}%`;
+  end.style.left   = `${_fragEndR   * 100}%`;
+  reg.style.left   = `${_fragStartR * 100}%`;
+  reg.style.width  = `${(_fragEndR - _fragStartR) * 100}%`;
+}
+
+export function enterFragmentMode(startRatio, endRatio, onChange) {
+  _fragStartR   = Math.max(0, Math.min(startRatio, 1));
+  _fragEndR     = Math.max(0, Math.min(endRatio,   1));
+  _fragOnChange = onChange;
+  _fragMode     = true;
+
+  ['seekbarFragStart', 'seekbarFragEnd', 'seekbarFragRegion'].forEach(id =>
+    document.getElementById(id).classList.remove('hidden')
+  );
+  updateFragMarkers();
+
+  const makeHandlerDrag = (which) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const track = document.getElementById('seekbarTrack');
+    const move = (ev) => {
+      const r = ratioFromEvent(ev, track);
+      if (which === 'start') _fragStartR = Math.min(r, _fragEndR - 0.001);
+      else                   _fragEndR   = Math.max(r, _fragStartR + 0.001);
+      _fragStartR = Math.max(0, _fragStartR);
+      _fragEndR   = Math.min(1, _fragEndR);
+      updateFragMarkers();
+      if (_fragOnChange) _fragOnChange(_fragStartR, _fragEndR);
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup',   up);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend',  up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup',   up);
+    document.addEventListener('touchmove', move);
+    document.addEventListener('touchend',  up);
+  };
+
+  document.getElementById('seekbarFragStart').onmousedown = makeHandlerDrag('start');
+  document.getElementById('seekbarFragEnd'  ).onmousedown = makeHandlerDrag('end');
+  document.getElementById('seekbarFragStart').ontouchstart = makeHandlerDrag('start');
+  document.getElementById('seekbarFragEnd'  ).ontouchstart = makeHandlerDrag('end');
+}
+
+export function exitFragmentMode() {
+  _fragMode = false;
+  ['seekbarFragStart', 'seekbarFragEnd', 'seekbarFragRegion'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
+}
+
 export function updateSeekbarOrigin(dahuaStartTime) {
   _playStart = parseDahua(dahuaStartTime);
   _wallStart = Date.now();

@@ -133,7 +133,10 @@
           <span id="seekbarPosClock">--:--:--</span>
         </div>
         <div class="seekbar-track" id="seekbarTrack">
+          <div class="seekbar-frag-region hidden" id="seekbarFragRegion"></div>
           <div class="seekbar-fill" id="seekbarFill"></div>
+          <div class="seekbar-frag-handle hidden" id="seekbarFragStart" data-which="start"></div>
+          <div class="seekbar-frag-handle hidden" id="seekbarFragEnd"   data-which="end"></div>
           <div class="seekbar-thumb" id="seekbarThumb"></div>
           <div class="seekbar-tooltip hidden" id="seekbarTooltip">
             <span id="tooltipDur"></span>
@@ -141,6 +144,27 @@
           </div>
         </div>
         <div class="seekbar-time" id="seekbarDur">00:00:00</div>
+      </div>
+    </div>
+
+    <div class="fragment-bar hidden" id="fragmentBar">
+      <div class="section-label" style="margin-bottom:0">Fragment do pobrania</div>
+      <div class="fragment-inputs">
+        <div class="field" style="margin:0">
+          <label>Od</label>
+          <input type="datetime-local" id="fragStart" step="1">
+        </div>
+        <div class="field" style="margin:0">
+          <label>Do</label>
+          <input type="datetime-local" id="fragEnd" step="1">
+        </div>
+      </div>
+      <div class="fragment-actions">
+        <button class="btn btn-primary btn-sm" onclick="downloadFragment()">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v8.59l2.3-2.3 1.4 1.42L8 12.41 4.3 8.71l1.4-1.42L8 9.59V1h2zm-6 12h12v2H2v-2z"/></svg>
+          Pobierz fragment
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="closeFragmentPanel()">Anuluj</button>
       </div>
     </div>
 
@@ -154,7 +178,13 @@
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1v8.59l2.3-2.3 1.4 1.42L8 12.41 4.3 8.71l1.4-1.42L8 9.59V1h2zm-6 12h12v2H2v-2z"/>
           </svg>
-          Pobierz
+          Całe
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openFragmentPanel()">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 2h4v12H2zm8 0h4v12h-4zM6 6h4v4H6z"/>
+          </svg>
+          Fragment
         </button>
         <button class="btn btn-ghost btn-sm" onclick="openShareModal()">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
