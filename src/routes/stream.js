@@ -18,12 +18,12 @@ router.post('/start', async (req, res) => {
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
     rtspUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
-    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264#hardware`;
     logDesc = `ch${channel} ${st}→${et}`;
   } else if (filePath) {
     const safePath = filePath.replace(/\.\./g, '');
     rtspUrl = `http://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
-    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264#hardware`;
     logDesc = safePath;
   } else {
     return res.status(400).json({ success: false, error: 'Brak parametrów' });
