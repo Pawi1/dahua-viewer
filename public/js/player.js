@@ -19,7 +19,7 @@ export function stopHeartbeat() {
   if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
 }
 
-export async function showPlayer(token, file) {
+export async function showPlayer(token, file, { keepSeekbar = false } = {}) {
   log(`[showPlayer] WebRTC token=${token}`);
   document.getElementById('playerIdle').style.display = 'none';
 
@@ -76,13 +76,12 @@ export async function showPlayer(token, file) {
 
   // Seekbar (tylko dla nagrań, nie live)
   const isLive = !file.endTime || file.startTime === file.endTime;
-  if (!isLive) {
+  if (!isLive && !keepSeekbar) {
+    let seeking = false;
     initSeekbar(file, async (seekTime) => {
-      if (!state.currentToken) return;
-      // Restart stream od seekTime
-      const endTime = toDahuaTime(toDatetimeLocal(new Date(
-        new Date(file.endTime.replace(' ', 'T')).getTime()
-      )));
+      if (!state.currentToken || seeking) return;
+      seeking = true;
+      showLoading(true, 'Przewijanie...', 'Ładowanie momentu nagrania...');
       try {
         await fetch('/api/stream/stop', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -97,9 +96,16 @@ export async function showPlayer(token, file) {
         const data = await r.json();
         if (!data.success) throw new Error(data.error);
         state.currentToken = data.token;
+        startHeartbeat(data.token);
         updateSeekbarOrigin(seekTime);
-        await showPlayer(data.token, { ...file, startTime: seekTime });
-      } catch (e) { err('[seek] error:', e.message); toast('Błąd seek', 'error'); }
+        await showPlayer(data.token, { ...file, startTime: seekTime }, { keepSeekbar: true });
+      } catch (e) {
+        err('[seek] error:', e.message);
+        showLoading(false);
+        toast('Błąd seek', 'error');
+      } finally {
+        seeking = false;
+      }
     });
   }
 

@@ -128,10 +128,17 @@
 
       <!-- Seekbar (ukryty dla live) -->
       <div class="seekbar hidden" id="seekbar">
-        <div class="seekbar-time" id="seekbarPos">00:00:00</div>
+        <div class="seekbar-time" id="seekbarPos">
+          <span id="seekbarPosDur">00:00</span>
+          <span id="seekbarPosClock">--:--:--</span>
+        </div>
         <div class="seekbar-track" id="seekbarTrack">
           <div class="seekbar-fill" id="seekbarFill"></div>
           <div class="seekbar-thumb" id="seekbarThumb"></div>
+          <div class="seekbar-tooltip hidden" id="seekbarTooltip">
+            <span id="tooltipDur"></span>
+            <span id="tooltipClock"></span>
+          </div>
         </div>
         <div class="seekbar-time" id="seekbarDur">00:00:00</div>
       </div>
