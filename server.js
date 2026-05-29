@@ -18,8 +18,9 @@ function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
   const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
            || 'go2rtc';
-  const cfg  = path.join(__dirname, 'go2rtc.yaml');
-  const proc = spawn(bin, ['-config', cfg], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const cfgMain    = path.join(__dirname, 'go2rtc.yaml');
+  const cfgStreams  = path.join(__dirname, 'go2rtc-streams.yaml');
+  const proc = spawn(bin, ['-config', cfgMain, '-config', cfgStreams], { stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
   proc.stderr.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
   proc.on('close', code => console.log(`[go2rtc] zakończył (kod: ${code})`));

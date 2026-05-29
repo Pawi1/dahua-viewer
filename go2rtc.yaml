@@ -11,4 +11,3 @@ webrtc:
 
 log:
   level: info
-streams:
