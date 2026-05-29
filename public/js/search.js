@@ -15,6 +15,7 @@ export async function searchRecordings() {
   state.currentChannel = channel;
   const startTime = toDahuaTime(startRaw);
   const endTime   = toDahuaTime(endRaw);
+  const flags = Array.from(document.querySelectorAll('#flagFilters input:checked')).map(el => el.value);
 
   const listEl = document.getElementById('resultsList');
   listEl.innerHTML = `<div class="results-loading"><div class="spinner"></div><span>Wyszukiwanie...</span></div>`;
@@ -23,7 +24,7 @@ export async function searchRecordings() {
     const r = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, startTime, endTime, resolution: state.currentResolution })
+      body: JSON.stringify({ channel, startTime, endTime, flags, resolution: state.currentResolution })
     });
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Błąd wyszukiwania');

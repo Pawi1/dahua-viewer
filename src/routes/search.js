@@ -6,7 +6,7 @@ const { parseKeyValue, parseMediaFiles } = require('../utils/dahua');
 const router = Router();
 
 router.post('/', async (req, res) => {
-  const { channel, startTime, endTime, types } = req.body;
+  const { channel, startTime, endTime, types, flags } = req.body;
   const channelNum = parseInt(channel, 10);
 
   if (!channelNum || !startTime || !endTime) {
@@ -20,7 +20,10 @@ router.post('/', async (req, res) => {
     if (!objectId) throw new Error('Nie można utworzyć obiektu wyszukiwania (brak result)');
 
     const searchTypes = types || ['dav', 'mp4'];
-    const typeParams = searchTypes.map((t, i) => `condition.Types[${i}]=${t}`).join('&');
+    const typeParams  = searchTypes.map((t, i) => `condition.Types[${i}]=${t}`).join('&');
+    const flagParams  = (flags && flags.length)
+      ? flags.map((f, i) => `condition.Flags[${i}]=${f}`).join('&')
+      : '';
     const query = [
       'action=findFile',
       `object=${objectId}`,
@@ -28,7 +31,8 @@ router.post('/', async (req, res) => {
       `condition.StartTime=${startTime.replace(/ /g, '%20')}`,
       `condition.EndTime=${endTime.replace(/ /g, '%20')}`,
       typeParams,
-    ].join('&');
+      flagParams,
+    ].filter(Boolean).join('&');
 
     await dApi.get(`/cgi-bin/mediaFileFind.cgi?${query}`);
 

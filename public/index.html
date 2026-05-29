@@ -55,6 +55,18 @@
         <input type="datetime-local" id="endTime" step="1">
       </div>
 
+      <div class="field">
+        <label>Typ nagrania</label>
+        <div class="flag-filters" id="flagFilters">
+          <label class="flag-chip"><input type="checkbox" value="Timing"  checked> Ciągłe</label>
+          <label class="flag-chip"><input type="checkbox" value="Event"   checked> Zdarzenie</label>
+          <label class="flag-chip"><input type="checkbox" value="Manual"  checked> Ręczne</label>
+          <label class="flag-chip"><input type="checkbox" value="Marker"> Oznaczone</label>
+          <label class="flag-chip"><input type="checkbox" value="Mosaic"> Mozaika</label>
+          <label class="flag-chip"><input type="checkbox" value="Cutout"> Wycinek</label>
+        </div>
+      </div>
+
       <div class="search-btn-row">
         <button class="btn btn-primary" onclick="searchRecordings()">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
