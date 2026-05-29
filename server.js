@@ -2,6 +2,7 @@
 
 const express = require('express');
 const path    = require('path');
+const fs      = require('fs');
 const { spawn, execSync } = require('child_process');
 
 const cfg      = require('./src/config');
@@ -18,9 +19,14 @@ function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
   const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
            || 'go2rtc';
-  const cfgMain    = path.join(__dirname, 'go2rtc.yaml');
-  const cfgStreams  = path.join(__dirname, 'go2rtc-streams.yaml');
-  const proc = spawn(bin, ['-config', cfgMain, '-config', cfgStreams], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Generuj runtime config: statyczne ustawienia z go2rtc.yaml + czysta sekcja streams
+  // go2rtc-streams.yaml jest gitignored → dynamic streams nie trafiają do repozytorium
+  const cfgStreams = path.join(__dirname, 'go2rtc-streams.yaml');
+  const staticCfg  = fs.readFileSync(path.join(__dirname, 'go2rtc.yaml'), 'utf8')
+                       .replace(/^streams:[\s\S]*/m, '').trimEnd();
+  fs.writeFileSync(cfgStreams, `${staticCfg}\nstreams:\n`);
+
+  const proc = spawn(bin, ['-config', cfgStreams], { stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
   proc.stderr.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
   proc.on('close', code => console.log(`[go2rtc] zakończył (kod: ${code})`));

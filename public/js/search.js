@@ -1,11 +1,11 @@
 import { state } from './state.js';
 import { toast, showLoading, initDefaultTimes } from './ui.js';
-import { toDahuaTime, formatTime, formatDuration, formatBytes, translateEvent, escHtml } from './utils.js';
+import { toDahuaTime, toDatetimeLocal, formatTime, formatDuration, formatBytes, translateEvent, escHtml } from './utils.js';
 import { showPlayer, stopStream } from './player.js';
 import { log, err } from './logger.js';
 
 export async function searchRecordings() {
-  const channel  = parseInt(document.getElementById('channelSelect').value);
+  const channel  = parseInt(document.getElementById('channelSelect').value) || 1;
   const startRaw = document.getElementById('startTime').value;
   const endRaw   = document.getElementById('endTime').value;
 
@@ -134,6 +134,86 @@ export function downloadCurrent() {
   if (!state.currentFile) return;
   const idx = state.searchResults.indexOf(state.currentFile);
   if (idx >= 0) downloadFile(idx);
+}
+
+export async function playAtTime() {
+  const channel  = parseInt(document.getElementById('channelSelect').value) || 1;
+  const timeRaw  = document.getElementById('playFromTime').value;
+  if (!timeRaw) return toast('Wybierz czas odtwarzania', 'error');
+
+  const wantedTime = toDahuaTime(timeRaw);
+
+  // Szukaj w załadowanych wynikach
+  let file = state.searchResults.find(f => f.startTime <= wantedTime && f.endTime >= wantedTime);
+
+  if (!file) {
+    // Szukaj wokół żądanego czasu
+    const wantedDate = new Date(timeRaw);
+    const sStart = toDahuaTime(toDatetimeLocal(new Date(wantedDate.getTime() - 5 * 60 * 1000)));
+    const sEnd   = toDahuaTime(toDatetimeLocal(new Date(wantedDate.getTime() + 2 * 60 * 60 * 1000)));
+    try {
+      const r    = await fetch('/api/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, startTime: sStart, endTime: sEnd }) });
+      const data = await r.json();
+      if (data.success && data.files?.length) {
+        state.searchResults = data.files;
+        renderResults(data.found, data.files);
+        file = data.files.find(f => f.startTime <= wantedTime && f.endTime >= wantedTime);
+      }
+    } catch (_) {}
+  }
+
+  if (!file) return toast('Brak nagrania o podanym czasie', 'error');
+
+  if (state.currentToken) await stopStream(true);
+
+  state.currentFile    = file;
+  state.currentChannel = channel;
+  log(`[playAtTime] ch${channel} od ${wantedTime}`);
+  showLoading(true, 'Łączenie WebRTC...', 'Nawiązywanie połączenia...');
+
+  try {
+    const r = await fetch('/api/stream/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, startTime: wantedTime, endTime: file.endTime })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
+    state.currentToken = data.token;
+    await showPlayer(data.token, { ...file, startTime: wantedTime });
+  } catch (e) {
+    err('[playAtTime] error:', e.message);
+    showLoading(false);
+    toast(e.message, 'error');
+  }
+}
+
+export async function playLive() {
+  const channel   = parseInt(document.getElementById('channelSelect').value) || 1;
+  const startTime = toDahuaTime(toDatetimeLocal(new Date(Date.now() - 5000)));
+  const endTime   = toDahuaTime(toDatetimeLocal(new Date(Date.now() + 3 * 60 * 60 * 1000)));
+
+  if (state.currentToken) await stopStream(true);
+
+  state.currentChannel = channel;
+  showLoading(true, 'Łączenie...', 'Strumień na żywo');
+
+  try {
+    const r = await fetch('/api/stream/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, startTime, endTime })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
+    state.currentToken = data.token;
+    state.currentFile  = { startTime, endTime, type: 'dav', filePath: null };
+    await showPlayer(data.token, state.currentFile);
+  } catch (e) {
+    err('[playLive] error:', e.message);
+    showLoading(false);
+    toast(e.message, 'error');
+  }
 }
 
 export function resetSearch() {

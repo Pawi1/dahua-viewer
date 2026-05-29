@@ -3,7 +3,7 @@ window.DEBUG = false;
 fetch('/api/config').then(r => r.json()).then(c => { window.DEBUG = c.debug; }).catch(() => {});
 
 import { initClock, initDefaultTimes, toast } from './ui.js';
-import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch } from './search.js';
+import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive } from './search.js';
 import { showPlayer, stopStream } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
 
@@ -15,6 +15,8 @@ window.playFile          = playFile;
 window.downloadFile      = downloadFile;
 window.downloadCurrent   = downloadCurrent;
 window.stopStream        = stopStream;
+window.playAtTime        = playAtTime;
+window.playLive          = playLive;
 window.openShareModal    = openShareModal;
 window.closeShareModal   = closeShareModal;
 window.generateShareLink = generateShareLink;

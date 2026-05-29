@@ -12,15 +12,18 @@ const router = Router();
 router.post('/start', async (req, res) => {
   const { channel, startTime, endTime, filePath } = req.body;
 
-  let rtspUrl, logDesc;
+  let rtspUrl, logDesc, go2rtcSrc;
+
   if (channel && startTime && endTime) {
     const st = toRtspTime(startTime);
     const et = toRtspTime(endTime);
     rtspUrl = `rtsp://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.rtspPort}/cam/playback?channel=${channel}&starttime=${st}&endtime=${et}`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264`;
     logDesc = `ch${channel} ${st}→${et}`;
   } else if (filePath) {
     const safePath = filePath.replace(/\.\./g, '');
     rtspUrl = `http://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
+    go2rtcSrc = `ffmpeg:${rtspUrl}#video=h264`;
     logDesc = safePath;
   } else {
     return res.status(400).json({ success: false, error: 'Brak parametrów' });
@@ -30,7 +33,7 @@ router.post('/start', async (req, res) => {
   console.log(`[stream:${token}] start → ${logDesc}`);
 
   try {
-    await go2rtc.createStream(token, `ffmpeg:${rtspUrl}#video=h264#width=1280#height=720`);
+    await go2rtc.createStream(token, go2rtcSrc);
     streamStore.set(token, { rtspUrl, startedAt: Date.now(), endedAt: null, logDesc });
     res.json({ success: true, token });
   } catch (err) {

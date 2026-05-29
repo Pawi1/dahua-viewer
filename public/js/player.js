@@ -77,7 +77,7 @@ export async function showPlayer(token, file) {
   document.getElementById('playerTitle').textContent =
     `Kanał ${channel}  ·  ${formatTime(file.startTime)} → ${formatTime(file.endTime)}`;
   document.getElementById('playerSub').textContent =
-    `${file.filePath ? file.filePath.split('/').pop() : file.type.toUpperCase()} · WebRTC`;
+    `${file.filePath ? file.filePath.split('/').pop() : file.type?.toUpperCase()} · WebRTC`;
 
   setTimeout(() => showLoading(false), 30000);
 }
@@ -89,6 +89,7 @@ export async function stopStream(silent = false) {
   if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
 
   const v = videoEl();
+  v.oncanplay = null; v.onplaying = null; v.onwaiting = null; v.onstalled = null; v.onerror = null;
   v.pause();
   v.srcObject = null;
   v.src = '';

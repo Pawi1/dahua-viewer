@@ -69,6 +69,24 @@
       </div>
     </div>
 
+    <div class="sidebar-section">
+      <div class="section-label">Odtwórz od czasu</div>
+      <div class="field">
+        <label>Czas</label>
+        <input type="datetime-local" id="playFromTime" step="1">
+      </div>
+      <div class="search-btn-row">
+        <button class="btn btn-primary" style="flex:1" onclick="playAtTime()">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 6-10 6V2z"/></svg>
+          Od czasu
+        </button>
+        <button class="btn btn-danger" style="flex:1" onclick="playLive()">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><circle cx="5" cy="5" r="5"/></svg>
+          Na żywo
+        </button>
+      </div>
+    </div>
+
     <div id="resultsList" class="results-list">
       <div class="results-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">

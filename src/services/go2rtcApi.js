@@ -4,11 +4,16 @@ const axios = require('axios');
 const BASE = 'http://127.0.0.1:1984';
 
 async function createStream(name, rtspUrl) {
-  await axios.put(
-    `${BASE}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`,
-    null,
-    { timeout: 5000 }
-  );
+  try {
+    await axios.put(
+      `${BASE}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`,
+      null,
+      { timeout: 5000 }
+    );
+  } catch (e) {
+    const body = e.response?.data;
+    throw new Error(`go2rtc PUT /api/streams → ${e.response?.status}: ${JSON.stringify(body)}`);
+  }
 }
 
 async function deleteStream(name) {
