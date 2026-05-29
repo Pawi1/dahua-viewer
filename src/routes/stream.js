@@ -57,8 +57,17 @@ router.post('/offer', express.text({ type: '*/*' }), async (req, res) => {
   }
 });
 
-router.post('/stop', async (req, res) => {
+router.post('/heartbeat', (req, res) => {
   const { token } = req.body;
+  const job = streamStore.get(token);
+  if (job && !job.endedAt) job.lastHeartbeat = Date.now();
+  res.json({ ok: !!job });
+});
+
+router.post('/stop', express.text({ type: ['application/json', 'text/plain', 'application/octet-stream', '*/*'] }), async (req, res) => {
+  let body = req.body;
+  if (typeof body === 'string') try { body = JSON.parse(body); } catch (_) { body = {}; }
+  const { token } = body;
   const job = streamStore.get(token);
   if (job) {
     await go2rtc.deleteStream(token);

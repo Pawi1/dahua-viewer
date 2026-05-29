@@ -58,6 +58,17 @@ export async function showPlayer(token, file) {
   await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
   log('[WebRTC] SDP exchange done');
 
+  // Heartbeat — informuj serwer że stream jest aktywny
+  if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+  state.heartbeatInterval = setInterval(() => {
+    if (!state.currentToken) return;
+    fetch('/api/stream/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: state.currentToken }),
+    }).catch(() => {});
+  }, 10000);
+
   v.oncanplay = () => {
     log('[video] canplay');
     v.play().catch(e => err('[video] play() failed:', e.message));
@@ -85,6 +96,7 @@ export async function showPlayer(token, file) {
 export async function stopStream(silent = false) {
   if (!state.currentToken) return;
 
+  if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
   if (state.currentMSEController) { state.currentMSEController.abort(); state.currentMSEController = null; }
   if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
 

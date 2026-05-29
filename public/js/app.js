@@ -66,6 +66,14 @@ function checkUrlParams() {
   }
 }
 
+import { state } from './state.js';
+
+window.addEventListener('beforeunload', () => {
+  if (state.currentToken) {
+    navigator.sendBeacon('/api/stream/stop', JSON.stringify({ token: state.currentToken }));
+  }
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   initClock();
   initDefaultTimes();
