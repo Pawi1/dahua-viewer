@@ -5,7 +5,7 @@ const go2rtc      = require('../services/go2rtcApi');
 
 const SHARE_TTL       = 0;               // expiry tracked in link itself
 const STREAM_MEM_TTL  = 2 * 60 * 60 * 1000; // 2h — usuń z pamięci po zakończeniu
-const HEARTBEAT_TTL   = 30 * 1000;           // 30s bez pingu → ubij stream
+const HEARTBEAT_TTL   = 60 * 1000;           // 60s bez pingu → ubij stream
 
 function startCleanupJob() {
   setInterval(async () => {

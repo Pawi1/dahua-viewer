@@ -114,7 +114,7 @@
         <div class="idle-hint">NVR Viewer · NVR Viewer</div>
       </div>
 
-      <video id="main-player" controls playsinline crossorigin="anonymous" style="display:none;object-fit:contain"></video>
+      <video id="main-player" playsinline crossorigin="anonymous" style="display:none;object-fit:contain"></video>
 
       <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
@@ -124,6 +124,16 @@
 
       <div class="buffering-overlay hidden" id="bufferingOverlay">
         <div class="spinner"></div>
+      </div>
+
+      <!-- Seekbar (ukryty dla live) -->
+      <div class="seekbar hidden" id="seekbar">
+        <div class="seekbar-time" id="seekbarPos">00:00:00</div>
+        <div class="seekbar-track" id="seekbarTrack">
+          <div class="seekbar-fill" id="seekbarFill"></div>
+          <div class="seekbar-thumb" id="seekbarThumb"></div>
+        </div>
+        <div class="seekbar-time" id="seekbarDur">00:00:00</div>
       </div>
     </div>
 

@@ -337,6 +337,65 @@ main { grid-area: main; display: flex; flex-direction: column; overflow: hidden;
   .player-wrapper { min-height: 250px; }
 }
 
+/* ─── SEEKBAR ────────────────────────────────────────────── */
+.seekbar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  background: linear-gradient(transparent, rgba(0,0,0,.75));
+  z-index: 60;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.player-wrapper:hover .seekbar:not(.hidden) { opacity: 1; }
+.seekbar.hidden { display: none; }
+
+.seekbar-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(255,255,255,.85);
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.seekbar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,.25);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+  transition: height .15s;
+}
+.seekbar-track:hover { height: 6px; }
+
+.seekbar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  width: 0%;
+}
+
+.seekbar-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px; height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform .15s;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.seekbar-track:hover .seekbar-thumb { transform: translate(-50%, -50%) scale(1); }
+
 /* ─── MISC ───────────────────────────────────────────────── */
 hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 .flex { display: flex; align-items: center; gap: 8px; }

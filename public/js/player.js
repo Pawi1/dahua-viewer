@@ -1,7 +1,23 @@
 import { state, videoEl } from './state.js';
 import { toast, showLoading, showBuffering } from './ui.js';
-import { formatTime } from './utils.js';
+import { formatTime, toDahuaTime, toDatetimeLocal } from './utils.js';
 import { log, err } from './logger.js';
+import { initSeekbar, destroySeekbar, updateSeekbarOrigin } from './seekbar.js';
+
+export function startHeartbeat(token) {
+  stopHeartbeat();
+  state.heartbeatInterval = setInterval(() => {
+    fetch('/api/stream/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    }).catch(() => {});
+  }, 10000);
+}
+
+export function stopHeartbeat() {
+  if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
+}
 
 export async function showPlayer(token, file) {
   log(`[showPlayer] WebRTC token=${token}`);
@@ -58,16 +74,35 @@ export async function showPlayer(token, file) {
   await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
   log('[WebRTC] SDP exchange done');
 
-  // Heartbeat — informuj serwer że stream jest aktywny
-  if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-  state.heartbeatInterval = setInterval(() => {
-    if (!state.currentToken) return;
-    fetch('/api/stream/heartbeat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: state.currentToken }),
-    }).catch(() => {});
-  }, 10000);
+  // Seekbar (tylko dla nagrań, nie live)
+  const isLive = !file.endTime || file.startTime === file.endTime;
+  if (!isLive) {
+    initSeekbar(file, async (seekTime) => {
+      if (!state.currentToken) return;
+      // Restart stream od seekTime
+      const endTime = toDahuaTime(toDatetimeLocal(new Date(
+        new Date(file.endTime.replace(' ', 'T')).getTime()
+      )));
+      try {
+        await fetch('/api/stream/stop', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: state.currentToken })
+        });
+        if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
+
+        const r = await fetch('/api/stream/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: state.currentChannel, startTime: seekTime, endTime: file.endTime })
+        });
+        const data = await r.json();
+        if (!data.success) throw new Error(data.error);
+        state.currentToken = data.token;
+        updateSeekbarOrigin(seekTime);
+        await showPlayer(data.token, { ...file, startTime: seekTime });
+      } catch (e) { err('[seek] error:', e.message); toast('Błąd seek', 'error'); }
+    });
+  }
+
 
   v.oncanplay = () => {
     log('[video] canplay');
@@ -96,7 +131,8 @@ export async function showPlayer(token, file) {
 export async function stopStream(silent = false) {
   if (!state.currentToken) return;
 
-  if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
+  destroySeekbar();
+  stopHeartbeat();
   if (state.currentMSEController) { state.currentMSEController.abort(); state.currentMSEController = null; }
   if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
 

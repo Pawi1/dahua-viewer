@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { toast, showLoading, initDefaultTimes } from './ui.js';
 import { toDahuaTime, toDatetimeLocal, formatTime, formatDuration, formatBytes, translateEvent, escHtml } from './utils.js';
-import { showPlayer, stopStream } from './player.js';
+import { showPlayer, stopStream, startHeartbeat } from './player.js';
 import { log, err } from './logger.js';
 
 export async function searchRecordings() {
@@ -113,6 +113,7 @@ export async function playFile(idx) {
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
 
     state.currentToken = data.token;
+    startHeartbeat(data.token);
     await showPlayer(data.token, file);
   } catch (e) {
     err('[playFile] error:', e.message);
@@ -180,6 +181,7 @@ export async function playAtTime() {
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
     state.currentToken = data.token;
+    startHeartbeat(data.token);
     await showPlayer(data.token, { ...file, startTime: wantedTime });
   } catch (e) {
     err('[playAtTime] error:', e.message);
@@ -208,6 +210,7 @@ export async function playLive() {
     if (!data.success) throw new Error(data.error || 'Nie można uruchomić strumienia');
     state.currentToken = data.token;
     state.currentFile  = { startTime, endTime, type: 'dav', filePath: null };
+    startHeartbeat(data.token);
     await showPlayer(data.token, state.currentFile);
   } catch (e) {
     err('[playLive] error:', e.message);
