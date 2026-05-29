@@ -1,11 +1,13 @@
 'use strict';
 
-const express = require('express');
-const path    = require('path');
-const fs      = require('fs');
+const express      = require('express');
+const path         = require('path');
+const fs           = require('fs');
+const cookieParser = require('cookie-parser');
 const { spawn, execSync } = require('child_process');
 
 const cfg      = require('./src/config');
+const auth     = require('./src/routes/auth');
 const search   = require('./src/routes/search');
 const stream   = require('./src/routes/stream');
 const download = require('./src/routes/download');
@@ -13,14 +15,13 @@ const nvr      = require('./src/routes/nvr');
 const proxy    = require('./src/routes/proxy');
 const { apiRouter: shareApi, pageRouter: sharePage } = require('./src/routes/share');
 const startCleanupJob = require('./src/jobs/cleanup');
+const authMiddleware  = require('./src/middleware/auth');
 
 // Uruchom go2rtc jako subprocess
 function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
   const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
            || 'go2rtc';
-  // Generuj runtime config: statyczne ustawienia z go2rtc.yaml + czysta sekcja streams
-  // go2rtc-streams.yaml jest gitignored → dynamic streams nie trafiają do repozytorium
   const cfgStreams = path.join(__dirname, 'go2rtc-streams.yaml');
   const staticCfg  = fs.readFileSync(path.join(__dirname, 'go2rtc.yaml'), 'utf8')
                        .replace(/^streams:[\s\S]*/m, '').trimEnd();
@@ -36,27 +37,26 @@ function startGo2rtc() {
 startGo2rtc();
 
 const app = express();
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Publiczne
 app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
+app.use('/api/auth', auth);
+app.use('/share',    sharePage);
+
+// Chronione
+app.use(authMiddleware);
 app.use('/api/search',   search);
 app.use('/api/stream',   stream);
 app.use('/api/download', download);
 app.use('/api/nvr',      nvr);
 app.use('/api/share',    shareApi);
-app.use('/share',        sharePage);
 app.use('/nvr-proxy',    proxy);
 
 startCleanupJob();
 
 app.listen(cfg.port, () => {
-  console.log('╔═══════════════════════════════════════════════════╗');
-  console.log('║         Dahua NVR Web Viewer — uruchomiony        ║');
-  console.log('╠═══════════════════════════════════════════════════╣');
-  console.log(`║  Adres:       http://localhost:${cfg.port}               ║`);
-  console.log(`║  NVR:         ${cfg.nvrHost}:${cfg.nvrPort}                     ║`);
-  console.log(`║  Użytkownik:  ${cfg.nvrUser}                           ║`);
-  console.log(`║  Kanały:      ${cfg.channels}                               ║`);
-  console.log('╚═══════════════════════════════════════════════════╝');
+  console.log(`Dahua NVR Web Viewer → http://localhost:${cfg.port}  |  NVR: ${cfg.nvrHost}:${cfg.nvrPort}  |  user: ${cfg.nvrUser}  |  kanały: ${cfg.channels}`);
 });

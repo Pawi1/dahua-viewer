@@ -1,7 +1,8 @@
 'use strict';
 const { Router } = require('express');
-const cfg = require('../config');
-const shareStore = require('../services/shareStore');
+const cfg      = require('../config');
+const shareStore  = require('../services/shareStore');
+const sessions    = require('../services/sessionStore');
 const { genToken } = require('../utils/tokens');
 
 const EXPIRED_HTML = `<!DOCTYPE html>
@@ -65,7 +66,12 @@ pageRouter.get('/:token', (req, res) => {
     return res.status(410).send(EXPIRED_HTML);
   }
   const { channel, startTime, endTime, filePath } = link;
-  const params = new URLSearchParams({ ch: channel, start: startTime, end: endTime, autoplay: '1' });
+
+  // Utwórz share-sesję ważną do wygaśnięcia linku
+  const sessionId = sessions.create('share', link.expiresAt - Date.now());
+  res.cookie('vp_session', sessionId, { httpOnly: true, sameSite: 'lax', expires: new Date(link.expiresAt) });
+
+  const params = new URLSearchParams({ mode: 'share', ch: channel, start: startTime, end: endTime, autoplay: '1' });
   if (filePath) params.set('fp', filePath);
   res.redirect(`/?${params.toString()}`);
 });
