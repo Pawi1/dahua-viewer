@@ -217,6 +217,33 @@ export async function playLive() {
   }
 }
 
+export async function playShareDirect(urlParams) {
+  const channel   = parseInt(urlParams.get('ch')) || 1;
+  const startTime = (urlParams.get('start') || '').replace('T', ' ');
+  const endTime   = (urlParams.get('end')   || '').replace('T', ' ');
+  const filePath  = urlParams.get('fp') || null;
+  if (!startTime || !endTime) return;
+
+  state.currentChannel = channel;
+  showLoading(true, 'Ładowanie nagrania...', '');
+
+  try {
+    const body = { channel, startTime, endTime, resolution: state.currentResolution };
+    if (filePath) body.filePath = filePath;
+    const r    = await fetch('/api/stream/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error);
+    state.currentToken = data.token;
+    state.currentFile  = { startTime, endTime, type: 'dav', filePath };
+    startHeartbeat(data.token);
+    await showPlayer(data.token, state.currentFile);
+  } catch (e) {
+    err('[share] error:', e.message);
+    showLoading(false);
+    toast(e.message, 'error');
+  }
+}
+
 export function resetSearch() {
   initDefaultTimes();
   state.searchResults = [];

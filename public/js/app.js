@@ -2,7 +2,7 @@ window.DEBUG = false;
 fetch('/api/config').then(r => r.json()).then(c => { window.DEBUG = c.debug; }).catch(() => {});
 
 import { initClock, initDefaultTimes, toast } from './ui.js';
-import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive } from './search.js';
+import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive, playShareDirect } from './search.js';
 import { showPlayer, stopStream, changeResolution } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
 import { openFragmentPanel, closeFragmentPanel, downloadFragment } from './fragment.js';
@@ -66,7 +66,11 @@ function checkUrlParams() {
   if (p.get('start')) document.getElementById('startTime').value     = p.get('start').replace(' ', 'T');
   if (p.get('end'))   document.getElementById('endTime').value       = p.get('end').replace(' ', 'T');
   if (p.get('autoplay') === '1' && p.get('start') && p.get('end')) {
-    setTimeout(() => searchRecordings(), 500);
+    if (p.get('mode') === 'share') {
+      setTimeout(() => playShareDirect(p), 500);
+    } else {
+      setTimeout(() => searchRecordings(), 500);
+    }
   }
 }
 
@@ -121,6 +125,19 @@ async function initApp() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const p = new URLSearchParams(location.search);
+
+  // Auto-authenticate from share token in URL (works for bookmarks / direct access)
+  if (p.get('mode') === 'share' && p.get('token')) {
+    const r = await fetch(`/api/auth/share?token=${encodeURIComponent(p.get('token'))}`, { method: 'POST' });
+    if (r.ok) {
+      document.body.classList.add('share-mode');
+      await initApp();
+      return;
+    }
+    // Token expired — fall through to normal auth check
+  }
+
   const r    = await fetch('/api/auth/check');
   const data = await r.json();
 
@@ -130,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  if (data.type === 'share' || new URLSearchParams(location.search).get('mode') === 'share') {
+  if (data.type === 'share' || p.get('mode') === 'share') {
     document.body.classList.add('share-mode');
   }
 

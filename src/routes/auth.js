@@ -1,7 +1,8 @@
 'use strict';
 const { Router } = require('express');
-const cfg      = require('../config');
-const sessions = require('../services/sessionStore');
+const cfg        = require('../config');
+const sessions   = require('../services/sessionStore');
+const shareStore = require('../services/shareStore');
 
 const router = Router();
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax' };
@@ -21,6 +22,18 @@ router.post('/login', (req, res) => {
   } else {
     res.status(401).json({ success: false, error: 'Nieprawidłowe dane logowania' });
   }
+});
+
+// Public — validates share token, creates a limited session (no search access)
+router.post('/share', (req, res) => {
+  const token = req.query.token || req.body?.token;
+  const link  = token ? shareStore.get(token) : null;
+  if (!link || Date.now() > link.expiresAt) {
+    return res.status(410).json({ success: false, error: 'Link wygasł' });
+  }
+  const id = sessions.create('share', link.expiresAt - Date.now());
+  res.cookie('vp_session', id, { ...COOKIE_OPTS, expires: new Date(link.expiresAt) });
+  res.json({ success: true });
 });
 
 router.post('/logout', (req, res) => {
