@@ -11,19 +11,16 @@ function startCleanupJob() {
   setInterval(async () => {
     const now = Date.now();
 
-    // Share links
     shareStore.forEach((link, token) => {
       if (now > link.expiresAt) shareStore.delete(token);
     });
 
-    // Streams
     for (const [token, job] of streamStore) {
       if (job.endedAt) {
         if (now - job.endedAt > STREAM_MEM_TTL) streamStore.delete(token);
         continue;
       }
 
-      // Aktywny stream bez pingu — frontend się rozłączył
       const lastPing = job.lastHeartbeat || job.startedAt;
       if (now - lastPing > HEARTBEAT_TTL) {
         console.log(`[gc] stale stream ${token} — brak pingu od ${Math.round((now - lastPing) / 1000)}s, ubijam`);

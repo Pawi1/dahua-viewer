@@ -1,143 +1,172 @@
 # Dahua NVR Web Viewer
 
-Aplikacja webowa do przeglądania i udostępniania nagrań z rejestratorów Dahua
-przez przeglądarkę. Żadnych wtyczek, żadnego ActiveX — czyste HLS w przeglądarce.
+A web application for browsing and sharing recordings from Dahua NVR/DVR devices through a browser. No plugins, no ActiveX — pure WebRTC playback via go2rtc.
 
-## Funkcje
+## Features
 
-- **Wyszukiwanie nagrań** po kanale i przedziale czasu (mediaFileFind API)
-- **Odtwarzanie** w przeglądarce przez konwersję RTSP → HLS (FFmpeg)
-- **Pobieranie** pliku .dav bezpośrednio z rejestratora
-- **Linki share** z terminem ważności — wyślij klientowi link bez dostępu do systemu
+- **Recording search** by channel and time range (Dahua mediaFileFind API)
+- **WebRTC playback** with hardware-accelerated decoding in the browser
+- **Live view** for any channel
+- **Seek** within recordings (restarts stream from new startTime via RTSP)
+- **Resolution selection** — 480p / 720p / 1080p / native
+- **Fragment download** — download a time-trimmed .dav clip
+- **Share links** with configurable TTL — send a link without exposing NVR credentials
+- **Login** — session-based authentication against NVR credentials
 
-## Wymagania
+## Requirements
 
-- **Node.js** >= 16 (`node --version`)
-- **FFmpeg** zainstalowany w systemie
-- Dostęp sieciowy do rejestratora Dahua (HTTP port 80 + RTSP port 554)
+- **Node.js** >= 18
+- **go2rtc** — handles RTSP ingestion and WebRTC signaling
+- **FFmpeg** — used by go2rtc to transcode H.265 → H.264 for browser compatibility
+- Network access to the Dahua NVR (HTTP port 80 + RTSP port 554)
 
-## Instalacja
+## Why go2rtc + FFmpeg
+
+Dahua cameras record in H.265 (HEVC). Browsers on Linux do not support H.265 WebRTC unless hardware decode is available. go2rtc receives the RTSP stream, runs it through FFmpeg (`libx264`, `ultrafast`, `zerolatency`) to produce H.264, then delivers it via WebRTC. This keeps the Node.js server thin — it never touches video data.
+
+## Installation
 
 ```bash
-# 1. Zainstaluj FFmpeg
-sudo apt update && sudo apt install -y ffmpeg     # Ubuntu/Debian
-# lub:
-# brew install ffmpeg                              # macOS
+# 1. Install go2rtc
+#    https://github.com/AlexxIT/go2rtc/releases
+#    Place the binary somewhere in PATH or set GO2RTC_BIN
 
-# 2. Zainstaluj zależności Node.js
+# 2. Install FFmpeg
+sudo apt install -y ffmpeg       # Debian/Ubuntu
+# brew install ffmpeg            # macOS
+
+# 3. Install Node.js dependencies
 npm install
 
-# 3. Uruchom (podstawowe)
-NVR_HOST=192.168.1.108 NVR_USER=admin NVR_PASS=TwojeHaslo node server.js
+# 4. Start
+NVR_HOST=192.168.1.108 NVR_USER=admin NVR_PASS=yourpassword node server.js
 
-# 4. Otwórz przeglądarkę
+# 5. Open browser
 http://localhost:3000
 ```
 
-## Konfiguracja przez zmienne środowiskowe
-
-| Zmienna        | Domyślnie      | Opis                              |
-|----------------|----------------|-----------------------------------|
-| `NVR_HOST`     | 192.168.1.108  | IP rejestratora Dahua             |
-| `NVR_PORT`     | 80             | Port HTTP rejestratora            |
-| `NVR_USER`     | admin          | Użytkownik                        |
-| `NVR_PASS`     | admin          | Hasło                             |
-| `NVR_RTSP_PORT`| 554            | Port RTSP                         |
-| `NVR_CHANNELS` | 16             | Liczba kanałów wideo              |
-| `PORT`         | 3000           | Port serwera webowego             |
-| `HLS_TTL_MIN`  | 60             | Max czas życia strumienia [min]   |
-| `SHARE_TTL_H`  | 72             | Domyślny czas ważności linku [h]  |
-| `HLS_DIR`      | /tmp/dahua_hls | Katalog na pliki HLS              |
-
-## Plik .env (opcjonalnie)
-
-Utwórz plik `.env` w katalogu aplikacji:
-
-```env
-NVR_HOST=192.168.1.108
-NVR_PORT=80
-NVR_USER=admin
-NVR_PASS=TwojeHaslo
-NVR_RTSP_PORT=554
-NVR_CHANNELS=16
-PORT=3000
-SHARE_TTL_H=72
-```
-
-I uruchom z: `node -r dotenv/config server.js` (po `npm install dotenv`)
-
-## Jako usługa systemd
-
-```ini
-# /etc/systemd/system/dahua-viewer.service
-[Unit]
-Description=Dahua NVR Web Viewer
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/dahua-viewer
-Environment="NVR_HOST=192.168.1.108"
-Environment="NVR_USER=admin"
-Environment="NVR_PASS=TwojeHaslo"
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+For development with auto-restart:
 
 ```bash
-sudo systemctl enable dahua-viewer
-sudo systemctl start dahua-viewer
-sudo systemctl status dahua-viewer
+npm run dev
 ```
 
-## Endpointy API
+## Environment Variables
 
-| Metoda | URL                          | Opis                              |
-|--------|------------------------------|-----------------------------------|
-| POST   | `/api/search`                | Wyszukaj nagrania                 |
-| POST   | `/api/stream/start`          | Uruchom stream HLS                |
-| POST   | `/api/stream/stop`           | Zatrzymaj stream                  |
-| GET    | `/hls/:token/:file`          | Serwowanie segmentów HLS          |
-| GET    | `/api/download`              | Pobierz plik .dav                 |
-| POST   | `/api/share`                 | Generuj link z TTL                |
-| GET    | `/share/:token`              | Otwórz nagranie przez link share  |
-| GET    | `/api/nvr/info`              | Info o rejestratorze              |
-| GET    | `/api/streams`               | Lista aktywnych streamów          |
+| Variable        | Default       | Description                                        |
+|-----------------|---------------|----------------------------------------------------|
+| `NVR_HOST`      | 192.168.1.108 | NVR IP address or hostname                         |
+| `NVR_PORT`      | 80            | NVR HTTP port                                      |
+| `NVR_USER`      | admin         | NVR username                                       |
+| `NVR_PASS`      | admin         | NVR password                                       |
+| `NVR_RTSP_PORT` | 554           | NVR RTSP port                                      |
+| `NVR_CHANNELS`  | 16            | Number of video channels                           |
+| `PORT`          | 3000          | Web server port                                    |
+| `SHARE_TTL_H`   | 72            | Default share link validity in hours (max 720)     |
+| `SECRET_KEY`    | random        | HMAC key for session tokens; set for persistence   |
+| `DEBUG`         | false         | Enable debug logging in the browser console        |
+| `GO2RTC_BIN`    | go2rtc        | Path to the go2rtc binary                          |
 
-## Uwagi techniczne
+## Architecture
 
-- Pliki HLS tworzone są w `/tmp/dahua_hls/<token>/`
-- Stare streamy są czyszczone automatycznie po `HLS_TTL_MIN` minutach
-- Linki share są przechowywane w pamięci — restart serwera usuwa je
-- Do produkcji zamiast pamięci RAM użyj Redis (łatwa podmiana w `server.js`)
-- Format pliku Dahua `.dav` można odtworzyć w SmartPlayer lub VLC
+```
+NVR (RTSP)
+    |
+    v
+go2rtc  <--  Node.js creates/destroys streams via go2rtc REST API
+    |         (POST /api/stream/start → PUT go2rtc /api/streams)
+    | WebRTC
+    v
+Browser  <-- SDP offer/answer proxied through /api/stream/offer
+    |
+    v
+<video> element (H.264, hardware-decoded by browser)
+```
 
-## Bezpieczeństwo
+go2rtc is launched as a child process of Node.js and configured via `go2rtc.yaml`. A runtime config file (`go2rtc-streams.yaml`) is written on startup with an empty `streams:` section; streams are added and removed dynamically while the server runs.
 
-> **Uwaga**: Ta aplikacja nie ma własnego systemu uwierzytelniania.  
-> W środowisku produkcyjnym zabezpiecz ją przez:
-> - Reverse proxy (nginx) z Basic Auth lub SSO
-> - VPN (dostęp tylko z sieci wewnętrznej)
-> - Firewall blokujący dostęp do portu z zewnątrz
+## API Endpoints
 
-## Troubleshooting
+### Authentication
 
-**„Nie można połączyć z rejestratorem"**  
-→ Sprawdź czy `NVR_HOST` jest poprawny i port 80/554 jest dostępny  
-→ `curl -u admin:haslo http://192.168.1.108/cgi-bin/magicBox.cgi?action=getSystemInfo`
+| Method | Path              | Description                                     |
+|--------|-------------------|-------------------------------------------------|
+| GET    | `/api/auth/check` | Returns `{ authenticated, type }` for current session |
+| POST   | `/api/auth/login` | Body: `{ username, password }` — creates session cookie |
+| POST   | `/api/auth/logout`| Invalidates session                             |
 
-**„Brak nagrań w podanym przedziale"**  
-→ Sprawdź czy nagrywanie jest aktywne na kanale  
-→ Upewnij się że dysk rejestratora nie jest pełny
+### NVR
 
-**Strumień nie startuje / timeout**  
-→ Sprawdź czy FFmpeg jest zainstalowany: `ffmpeg -version`  
-→ Testuj RTSP ręcznie: `ffplay "rtsp://admin:haslo@192.168.1.108:554/cam/playback?channel=1&starttime=..."`
+| Method | Path               | Description                        |
+|--------|--------------------|------------------------------------|
+| GET    | `/api/nvr/info`    | NVR system info (model, firmware)  |
+| GET    | `/api/nvr/channels`| Number of available channels       |
 
-**Plik .dav nie odtwarza się w przeglądarce po pobraniu**  
-→ Użyj SmartPlayer (Dahua) lub VLC; .dav to format proprietary Dahua
+### Search
+
+| Method | Path          | Description                                                      |
+|--------|---------------|------------------------------------------------------------------|
+| POST   | `/api/search` | Body: `{ channel, startTime, endTime }` — returns recording list |
+
+Times use Dahua format: `"2025-01-15 08:00:00"`.
+
+### Streaming
+
+| Method | Path                   | Description                                                   |
+|--------|------------------------|---------------------------------------------------------------|
+| POST   | `/api/stream/start`    | Body: `{ channel, startTime, endTime, resolution?, filePath? }` — registers stream in go2rtc, returns `{ token }` |
+| POST   | `/api/stream/offer`    | Query: `?token=` — proxies WebRTC SDP offer to go2rtc         |
+| POST   | `/api/stream/heartbeat`| Body: `{ token }` — keeps stream alive; call every ~10s       |
+| POST   | `/api/stream/stop`     | Body: `{ token }` — removes stream from go2rtc                |
+
+Streams without a heartbeat for 60 seconds are garbage-collected automatically.
+
+Resolution values: `480p` (default), `720p`, `1080p`, `native`.
+
+### Download
+
+| Method | Path            | Description                                                    |
+|--------|-----------------|----------------------------------------------------------------|
+| GET    | `/api/download` | Query: `channel + startTime + endTime` or `filePath` — pipes .dav from NVR. Optional `sample=N` to truncate to N seconds. |
+
+### Share
+
+| Method | Path              | Description                                                     |
+|--------|-------------------|-----------------------------------------------------------------|
+| POST   | `/api/share`      | Body: `{ channel, startTime, endTime, filePath?, ttlHours? }` — generates share token |
+| GET    | `/api/share/:token` | Returns share link metadata                                   |
+| GET    | `/share/:token`   | Redirect to player with a temporary read-only session (no search access) |
+
+## go2rtc Configuration
+
+The `go2rtc.yaml` file defines FFmpeg transcoding profiles and go2rtc API binding:
+
+```yaml
+api:
+  listen: "127.0.0.1:1984"   # local only; never exposed to the network
+
+ffmpeg:
+  h264_480p:   "-vf scale=-2:480  -codec:v libx264 -preset ultrafast -tune zerolatency -crf 26"
+  h264_720p:   "-vf scale=-2:720  -codec:v libx264 -preset ultrafast -tune zerolatency -crf 24"
+  h264_1080p:  "-vf scale=-2:1080 -codec:v libx264 -preset ultrafast -tune zerolatency -crf 22"
+  h264_native: "-codec:v libx264 -preset ultrafast -tune zerolatency -crf 20"
+```
+
+## Stack
+
+| Component   | Role                                                       |
+|-------------|------------------------------------------------------------|
+| Node.js 18+ | HTTP server, Dahua API proxy, session/share management     |
+| Express 4   | Routing                                                    |
+| axios       | Dahua Digest Auth HTTP client                              |
+| go2rtc      | RTSP ingestion, H.264 re-encoding via FFmpeg, WebRTC relay |
+| FFmpeg      | H.265 → H.264 transcoding inside go2rtc                   |
+| Browser     | WebRTC video (`<video>`), custom seekbar, WebRTC signaling |
+
+## Security Notes
+
+The application uses session cookies (`httpOnly`, `sameSite=lax`) validated against NVR credentials. Share links create read-only sessions scoped to the linked recording — they cannot access search or other channels.
+
+For production, place behind a reverse proxy (nginx/Caddy) with TLS. go2rtc's API is bound to `127.0.0.1` only and is not exposed externally.
+
+Sessions and share links are stored in memory — a server restart clears them.

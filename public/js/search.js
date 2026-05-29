@@ -144,11 +144,9 @@ export async function playAtTime() {
 
   const wantedTime = toDahuaTime(timeRaw);
 
-  // Szukaj w załadowanych wynikach
   let file = state.searchResults.find(f => f.startTime <= wantedTime && f.endTime >= wantedTime);
 
   if (!file) {
-    // Szukaj wokół żądanego czasu
     const wantedDate = new Date(timeRaw);
     const sStart = toDahuaTime(toDatetimeLocal(new Date(wantedDate.getTime() - 5 * 60 * 1000)));
     const sEnd   = toDahuaTime(toDatetimeLocal(new Date(wantedDate.getTime() + 2 * 60 * 60 * 1000)));

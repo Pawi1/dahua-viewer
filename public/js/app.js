@@ -1,4 +1,3 @@
-// Ustaw DEBUG zanim inne moduły zalogują cokolwiek
 window.DEBUG = false;
 fetch('/api/config').then(r => r.json()).then(c => { window.DEBUG = c.debug; }).catch(() => {});
 
@@ -8,7 +7,6 @@ import { showPlayer, stopStream, changeResolution } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
 import { openFragmentPanel, closeFragmentPanel, downloadFragment } from './fragment.js';
 
-// Expose do window żeby działały onclick= w HTML
 window.searchRecordings  = searchRecordings;
 window.resetSearch       = resetSearch;
 window.selectFile        = selectFile;

@@ -45,7 +45,6 @@ router.post('/start', async (req, res) => {
   }
 });
 
-// WebRTC SDP offer proxy → go2rtc
 router.post('/offer', express.text({ type: '*/*' }), async (req, res) => {
   const { token } = req.query;
   if (!streamStore.get(token)) return res.status(404).send('Nieznany token');

@@ -17,7 +17,6 @@ const { apiRouter: shareApi, pageRouter: sharePage } = require('./src/routes/sha
 const startCleanupJob = require('./src/jobs/cleanup');
 const authMiddleware  = require('./src/middleware/auth');
 
-// Uruchom go2rtc jako subprocess
 function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
   const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
@@ -41,12 +40,10 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Publiczne
 app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
 app.use('/api/auth', auth);
 app.use('/share',    sharePage);
 
-// Chronione
 app.use(authMiddleware);
 app.use('/api/search',   search);
 app.use('/api/stream',   stream);

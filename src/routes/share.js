@@ -24,7 +24,6 @@ const EXPIRED_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-// Mounted at /api/share
 const apiRouter = Router();
 
 apiRouter.post('/', (req, res) => {
@@ -57,7 +56,6 @@ apiRouter.get('/:token', (req, res) => {
   res.json({ ...link, expiresAt: new Date(link.expiresAt).toISOString() });
 });
 
-// Mounted at /share
 const pageRouter = Router();
 
 pageRouter.get('/:token', (req, res) => {
@@ -67,7 +65,6 @@ pageRouter.get('/:token', (req, res) => {
   }
   const { channel, startTime, endTime, filePath } = link;
 
-  // Utwórz share-sesję ważną do wygaśnięcia linku
   const sessionId = sessions.create('share', link.expiresAt - Date.now());
   res.cookie('vp_session', sessionId, { httpOnly: true, sameSite: 'lax', expires: new Date(link.expiresAt) });
 

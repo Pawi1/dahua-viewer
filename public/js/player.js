@@ -110,7 +110,6 @@ export async function showPlayer(token, file, { keepSeekbar = false } = {}) {
   await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
   log('[WebRTC] SDP exchange done');
 
-  // Seekbar (tylko dla nagrań, nie live)
   const isLive = !file.endTime || file.startTime === file.endTime;
   if (!isLive && !keepSeekbar) {
     let seeking = false;
