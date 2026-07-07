@@ -1,5 +1,6 @@
 'use strict';
 const { Router } = require('express');
+const crypto     = require('crypto');
 const cfg        = require('../config');
 const sessions   = require('../services/sessionStore');
 const shareStore = require('../services/shareStore');
@@ -8,6 +9,13 @@ const router = Router();
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax' };
 const SESSION_TTL = 8 * 60 * 60 * 1000; // 8h
 
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a ?? ''));
+  const bufB = Buffer.from(String(b ?? ''));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 router.get('/check', (req, res) => {
   const session = sessions.get(req.cookies?.vp_session);
   res.json(session ? { authenticated: true, type: session.type } : { authenticated: false });
@@ -15,7 +23,7 @@ router.get('/check', (req, res) => {
 
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === cfg.nvrUser && password === cfg.nvrPass) {
+  if (safeEqual(username, cfg.nvrUser) && safeEqual(password, cfg.nvrPass)) {
     const id = sessions.create('full', SESSION_TTL);
     res.cookie('vp_session', id, { ...COOKIE_OPTS, maxAge: SESSION_TTL });
     res.json({ success: true });
