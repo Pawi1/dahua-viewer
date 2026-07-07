@@ -1,6 +1,7 @@
 'use strict';
 
 const express      = require('express');
+const helmet       = require('helmet');
 const path         = require('path');
 const fs           = require('fs');
 const cookieParser = require('cookie-parser');
@@ -39,6 +40,11 @@ const app = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(csrfGuard);
+// CSP wyłączone: UI opiera się na atrybutach onclick="..." i module scriptcie
+// inline w converter.html — dopasowanie CSP do tego wymagałoby osobnego
+// refaktoru frontendu. Reszta nagłówków helmeta (HSTS, X-Frame-Options,
+// nosniff, referrer-policy...) działa bez zmian w UI.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
 app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));
