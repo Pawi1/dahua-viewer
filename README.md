@@ -12,6 +12,7 @@ A web application for browsing and sharing recordings from Dahua NVR/DVR devices
 - **Fragment download** — download a time-trimmed .dav clip
 - **Share links** with configurable TTL — send a link without exposing NVR credentials
 - **Login** — session-based authentication against NVR credentials
+- **DAV → MP4 converter** (`/converter.html`) — in-browser conversion via ffmpeg.wasm; the file never leaves the client, the Node server only serves the static ffmpeg.wasm assets
 
 ## Requirements
 
@@ -161,6 +162,7 @@ ffmpeg:
 | axios       | Dahua Digest Auth HTTP client                              |
 | go2rtc      | RTSP ingestion, H.264 re-encoding via FFmpeg, WebRTC relay |
 | FFmpeg      | H.265 → H.264 transcoding inside go2rtc                   |
+| ffmpeg.wasm | In-browser DAV → MP4 conversion (`/converter.html`), no server round-trip |
 | Browser     | WebRTC video (`<video>`), custom seekbar, WebRTC signaling |
 
 ## Security Notes
