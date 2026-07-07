@@ -12,7 +12,6 @@ const search   = require('./src/routes/search');
 const stream   = require('./src/routes/stream');
 const download = require('./src/routes/download');
 const nvr      = require('./src/routes/nvr');
-const proxy    = require('./src/routes/proxy');
 const { apiRouter: shareApi, pageRouter: sharePage } = require('./src/routes/share');
 const startCleanupJob = require('./src/jobs/cleanup');
 const authMiddleware  = require('./src/middleware/auth');
@@ -53,7 +52,6 @@ app.use('/api/stream',   stream);
 app.use('/api/download', download);
 app.use('/api/nvr',      nvr);
 app.use('/api/share',    shareApi);
-app.use('/nvr-proxy',    proxy);
 
 startCleanupJob();
 

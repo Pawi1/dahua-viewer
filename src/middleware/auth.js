@@ -3,7 +3,7 @@ const sessions = require('../services/sessionStore');
 
 const PUBLIC = ['/api/auth/', '/api/config'];
 
-// Share-sesje mogą dotykać wyłącznie tych prefiksów — bez wyszukiwarki i bez /nvr-proxy
+// Share-sesje mogą dotykać wyłącznie tych prefiksów — bez wyszukiwarki
 const SHARE_ALLOWED_PREFIXES = ['/api/stream/', '/api/download', '/api/nvr/'];
 
 // Endpointy, gdzie parametry żądania muszą mieścić się w zakresie przyznanym share-linkowi
