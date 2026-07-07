@@ -6,7 +6,6 @@ const sessions   = require('../services/sessionStore');
 const shareStore = require('../services/shareStore');
 
 const router = Router();
-const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax' };
 const SESSION_TTL = 8 * 60 * 60 * 1000; // 8h
 
 function safeEqual(a, b) {
@@ -25,7 +24,7 @@ router.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (safeEqual(username, cfg.nvrUser) && safeEqual(password, cfg.nvrPass)) {
     const id = sessions.create('full', SESSION_TTL);
-    res.cookie('session_id', id, { ...COOKIE_OPTS, maxAge: SESSION_TTL });
+    res.cookie('session_id', id, { httpOnly: true, secure: req.secure, sameSite: 'lax', maxAge: SESSION_TTL });
     res.json({ success: true });
   } else {
     res.status(401).json({ success: false, error: 'Nieprawidłowe dane logowania' });
@@ -40,7 +39,7 @@ router.post('/share', (req, res) => {
   const id = sessions.create('share', link.expiresAt - Date.now(), {
     channel: link.channel, startTime: link.startTime, endTime: link.endTime, filePath: link.filePath,
   });
-  res.cookie('session_id', id, { ...COOKIE_OPTS, expires: new Date(link.expiresAt) });
+  res.cookie('session_id', id, { httpOnly: true, secure: req.secure, sameSite: 'lax', expires: new Date(link.expiresAt) });
   res.json({ success: true });
 });
 

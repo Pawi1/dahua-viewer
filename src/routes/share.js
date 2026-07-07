@@ -62,7 +62,7 @@ pageRouter.get('/:token', (req, res) => {
   const { channel, startTime, endTime, filePath } = link;
 
   const sessionId = sessions.create('share', link.expiresAt - Date.now(), { channel, startTime, endTime, filePath });
-  res.cookie('session_id', sessionId, { httpOnly: true, sameSite: 'lax', expires: new Date(link.expiresAt) });
+  res.cookie('session_id', sessionId, { httpOnly: true, secure: req.secure, sameSite: 'lax', expires: new Date(link.expiresAt) });
 
   const params = new URLSearchParams({ mode: 'share', token: req.params.token, ch: channel, start: startTime, end: endTime, autoplay: '1' });
   if (filePath) params.set('fp', filePath);

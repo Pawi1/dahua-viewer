@@ -46,6 +46,13 @@ test('POST /login with correct credentials creates a full session cookie', async
     const cookie = sessionCookieFrom(r);
     assert.ok(cookie);
 
+    const setCookie = r.headers.get('set-cookie');
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Lax/i);
+    // Plain HTTP in this test (no TLS, no trust-proxy headers) -> req.secure
+    // is false, so the Secure flag should be dynamically omitted here.
+    assert.doesNotMatch(setCookie, /;\s*Secure/i);
+
     const check = await fetch(`${baseUrl}/api/auth/check`, { headers: { cookie } });
     assert.deepEqual(await check.json(), { authenticated: true, type: 'full' });
   });
@@ -107,4 +114,23 @@ test('POST /share with a missing token returns 410', async () => {
     const r = await fetch(`${baseUrl}/api/auth/share`, { method: 'POST' });
     assert.equal(r.status, 410);
   });
+});
+
+test('the session cookie gets the Secure flag when served through a trusted TLS-terminating proxy', async () => {
+  const app = express();
+  app.set('trust proxy', 1);
+  app.use(cookieParser());
+  app.use(express.json());
+  app.use('/api/auth', authRouter);
+  const server = await startTestServer(app);
+  try {
+    const r = await fetch(`${server.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-proto': 'https' },
+      body: JSON.stringify({ username: cfg.nvrUser, password: cfg.nvrPass }),
+    });
+    assert.match(r.headers.get('set-cookie'), /;\s*Secure/i);
+  } finally {
+    await server.close();
+  }
 });

@@ -1,30 +1,32 @@
+import './csrf.js';
+
 window.DEBUG = false;
 fetch('/api/config').then(r => r.json()).then(c => { window.DEBUG = c.debug; }).catch(() => {});
 
 import { initClock, initDefaultTimes, toast } from './ui.js';
-import { searchRecordings, selectFile, playFile, downloadFile, downloadCurrent, resetSearch, playAtTime, playLive, playShareDirect } from './search.js';
+import { searchRecordings, downloadCurrent, resetSearch, playAtTime, playLive, playShareDirect, initResultsListEvents } from './search.js';
 import { showPlayer, stopStream, changeResolution } from './player.js';
 import { openShareModal, closeShareModal, generateShareLink, copyShareUrl } from './share.js';
 import { openFragmentPanel, closeFragmentPanel, downloadFragment } from './fragment.js';
 
-window.searchRecordings  = searchRecordings;
-window.resetSearch       = resetSearch;
-window.selectFile        = selectFile;
-window.playFile          = playFile;
-window.downloadFile      = downloadFile;
-window.downloadCurrent   = downloadCurrent;
-window.stopStream        = stopStream;
-window.changeResolution  = changeResolution;
-window.playAtTime        = playAtTime;
-window.playLive          = playLive;
-window.logout             = logout;
-window.openFragmentPanel  = openFragmentPanel;
-window.closeFragmentPanel = closeFragmentPanel;
-window.downloadFragment   = downloadFragment;
-window.openShareModal     = openShareModal;
-window.closeShareModal   = closeShareModal;
-window.generateShareLink = generateShareLink;
-window.copyShareUrl      = copyShareUrl;
+function bindUiEvents() {
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+  document.getElementById('searchBtn').addEventListener('click', searchRecordings);
+  document.getElementById('resetSearchBtn').addEventListener('click', resetSearch);
+  document.getElementById('playAtTimeBtn').addEventListener('click', playAtTime);
+  document.getElementById('playLiveBtn').addEventListener('click', playLive);
+  document.getElementById('downloadFragmentBtn').addEventListener('click', downloadFragment);
+  document.getElementById('cancelFragmentBtn').addEventListener('click', closeFragmentPanel);
+  document.getElementById('downloadCurrentBtn').addEventListener('click', downloadCurrent);
+  document.getElementById('openFragmentBtn').addEventListener('click', openFragmentPanel);
+  document.getElementById('openShareBtn').addEventListener('click', openShareModal);
+  document.getElementById('stopStreamBtn').addEventListener('click', () => stopStream());
+  document.getElementById('shareModalCloseBtn').addEventListener('click', closeShareModal);
+  document.getElementById('copyShareUrlBtn').addEventListener('click', copyShareUrl);
+  document.getElementById('shareModalCancelBtn').addEventListener('click', closeShareModal);
+  document.getElementById('generateShareLinkBtn').addEventListener('click', generateShareLink);
+  document.getElementById('resolutionSelect').addEventListener('change', (e) => changeResolution(e.target.value));
+}
 
 async function checkNvr() {
   try {
@@ -78,7 +80,15 @@ import { state } from './state.js';
 
 window.addEventListener('beforeunload', () => {
   if (state.currentToken) {
-    navigator.sendBeacon('/api/stream/stop', JSON.stringify({ token: state.currentToken }));
+    // sendBeacon can't carry custom headers, so it can't include the CSRF
+    // token; fetch(..., { keepalive: true }) is the modern equivalent that
+    // still survives page unload while going through the same fetch wrapper.
+    fetch('/api/stream/stop', {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: state.currentToken }),
+    });
   }
 });
 
@@ -125,6 +135,9 @@ async function initApp() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  bindUiEvents();
+  initResultsListEvents();
+
   const p = new URLSearchParams(location.search);
 
   // Auto-authenticate from share token in URL (works for bookmarks / direct access)
