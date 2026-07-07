@@ -49,20 +49,16 @@ apiRouter.post('/', (req, res) => {
 });
 
 apiRouter.get('/:token', (req, res) => {
-  const link = shareStore.get(req.params.token);
-  if (!link || Date.now() > link.expiresAt) {
-    return res.status(410).json({ error: 'Link wygasł' });
-  }
+  const link = shareStore.getValid(req.params.token);
+  if (!link) return res.status(410).json({ error: 'Link wygasł' });
   res.json({ ...link, expiresAt: new Date(link.expiresAt).toISOString() });
 });
 
 const pageRouter = Router();
 
 pageRouter.get('/:token', (req, res) => {
-  const link = shareStore.get(req.params.token);
-  if (!link || Date.now() > link.expiresAt) {
-    return res.status(410).send(EXPIRED_HTML);
-  }
+  const link = shareStore.getValid(req.params.token);
+  if (!link) return res.status(410).send(EXPIRED_HTML);
   const { channel, startTime, endTime, filePath } = link;
 
   const sessionId = sessions.create('share', link.expiresAt - Date.now(), { channel, startTime, endTime, filePath });

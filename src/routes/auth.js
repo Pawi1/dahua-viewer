@@ -35,10 +35,8 @@ router.post('/login', (req, res) => {
 // Public — validates share token, creates a limited session (no search access)
 router.post('/share', (req, res) => {
   const token = req.query.token || req.body?.token;
-  const link  = token ? shareStore.get(token) : null;
-  if (!link || Date.now() > link.expiresAt) {
-    return res.status(410).json({ success: false, error: 'Link wygasł' });
-  }
+  const link  = shareStore.getValid(token);
+  if (!link) return res.status(410).json({ success: false, error: 'Link wygasł' });
   const id = sessions.create('share', link.expiresAt - Date.now(), {
     channel: link.channel, startTime: link.startTime, endTime: link.endTime, filePath: link.filePath,
   });
