@@ -5,7 +5,7 @@ const helmet       = require('helmet');
 const path         = require('path');
 const fs           = require('fs');
 const cookieParser = require('cookie-parser');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 
 const cfg      = require('./src/config');
 const auth     = require('./src/routes/auth');
@@ -20,7 +20,7 @@ const csrfGuard       = require('./src/middleware/csrf');
 
 function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
-  const bin = candidates.find(p => { try { execSync(`test -x ${p}`); return true; } catch { return false; } })
+  const bin = candidates.find(p => { try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; } })
            || 'go2rtc';
   const cfgStreams = path.join(__dirname, 'go2rtc-streams.yaml');
   const staticCfg  = fs.readFileSync(path.join(__dirname, 'go2rtc.yaml'), 'utf8')
