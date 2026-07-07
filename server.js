@@ -34,35 +34,43 @@ function startGo2rtc() {
   proc.on('error', err  => console.error(`[go2rtc] failed to start:`, err.message));
   return proc;
 }
-startGo2rtc();
 
-const app = express();
-app.use(cookieParser());
-app.use(express.json());
-app.use(csrfGuard);
-// CSP disabled: the UI relies on onclick="..." attributes and an inline
-// module script in converter.html — matching CSP to that would need a
-// separate frontend refactor. The rest of helmet's headers (HSTS,
-// X-Frame-Options, nosniff, referrer-policy...) work with no UI changes.
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
-app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));
-app.use('/ffmpeg/util',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/util/dist/esm')));
+function createApp() {
+  const app = express();
+  app.use(cookieParser());
+  app.use(express.json());
+  app.use(csrfGuard);
+  // CSP disabled: the UI relies on onclick="..." attributes and an inline
+  // module script in converter.html — matching CSP to that would need a
+  // separate frontend refactor. The rest of helmet's headers (HSTS,
+  // X-Frame-Options, nosniff, referrer-policy...) work with no UI changes.
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
+  app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));
+  app.use('/ffmpeg/util',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/util/dist/esm')));
 
-app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
-app.use('/api/auth', auth);
-app.use('/share',    sharePage);
+  app.get('/api/config', (_req, res) => res.json({ debug: cfg.debug }));
+  app.use('/api/auth', auth);
+  app.use('/share',    sharePage);
 
-app.use(authMiddleware);
-app.use('/api/search',   search);
-app.use('/api/stream',   stream);
-app.use('/api/download', download);
-app.use('/api/nvr',      nvr);
-app.use('/api/share',    shareApi);
+  app.use(authMiddleware);
+  app.use('/api/search',   search);
+  app.use('/api/stream',   stream);
+  app.use('/api/download', download);
+  app.use('/api/nvr',      nvr);
+  app.use('/api/share',    shareApi);
 
-startCleanupJob();
+  return app;
+}
 
-app.listen(cfg.port, () => {
-  console.log(`Dahua NVR Web Viewer → http://localhost:${cfg.port}  |  NVR: ${cfg.nvrHost}:${cfg.nvrPort}  |  user: ${cfg.nvrUser}  |  channels: ${cfg.channels}`);
-});
+if (require.main === module) {
+  startGo2rtc();
+  const app = createApp();
+  startCleanupJob();
+  app.listen(cfg.port, () => {
+    console.log(`Dahua NVR Web Viewer → http://localhost:${cfg.port}  |  NVR: ${cfg.nvrHost}:${cfg.nvrPort}  |  user: ${cfg.nvrUser}  |  channels: ${cfg.channels}`);
+  });
+}
+
+module.exports = { createApp, startGo2rtc };
