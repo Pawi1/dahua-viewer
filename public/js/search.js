@@ -62,16 +62,16 @@ export function renderResults(found, files) {
     const dur = f.duration ? ` · ${formatDuration(f.duration)}` : '';
     const size = f.length  ? ` · ${formatBytes(f.length)}` : '';
     const eventsHtml = f.events.slice(0, 2).map(e =>
-      `<span class="badge">${translateEvent(e)}</span>`
+      `<span class="badge">${escHtml(translateEvent(e))}</span>`
     ).join('');
 
     html += `
       <div class="file-card" id="card-${idx}" onclick="selectFile(${idx})">
         <div class="file-card-time">
-          <span>${formatTime(f.startTime)}</span> → ${formatTime(f.endTime)}
+          <span>${escHtml(formatTime(f.startTime))}</span> → ${escHtml(formatTime(f.endTime))}
         </div>
         <div class="file-card-meta">
-          <span class="badge">${f.type.toUpperCase()}</span>
+          <span class="badge">${escHtml(f.type.toUpperCase())}</span>
           ${eventsHtml}
           <span>${dur}${size}</span>
         </div>
