@@ -2,6 +2,7 @@
   "name": "dahua-viewer",
   "version": "1.0.0",
   "description": "Dahua NVR/DVR Web Video Viewer",
+  "license": "Apache-2.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
