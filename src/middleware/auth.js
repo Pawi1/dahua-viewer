@@ -24,7 +24,7 @@ function withinShareScope(scope, req) {
 module.exports = function authMiddleware(req, res, next) {
   if (PUBLIC.some(p => req.path.startsWith(p))) return next();
 
-  const session = sessions.get(req.cookies?.vp_session);
+  const session = sessions.get(req.cookies?.session_id);
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
 
   if (session.type === 'share') {
