@@ -22,9 +22,9 @@ async function deleteStream(name) {
   } catch(_) {}
 }
 
-async function webrtcOffer(rtspUrl, sdpOffer) {
+async function webrtcOffer(streamName, sdpOffer) {
   const resp = await axios.post(
-    `${BASE}/api/webrtc?src=${encodeURIComponent(rtspUrl)}`,
+    `${BASE}/api/webrtc?src=${encodeURIComponent(streamName)}`,
     sdpOffer,
     {
       headers: { 'Content-Type': 'text/plain' },
