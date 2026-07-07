@@ -1,12 +1,12 @@
 'use strict';
 const crypto = require('crypto');
 
-// sessionId → { type: 'full'|'share', expiresAt }
+// sessionId → { type: 'full'|'share', expiresAt, scope }
 const store = new Map();
 
-function create(type, ttlMs) {
+function create(type, ttlMs, scope = null) {
   const id = crypto.randomBytes(32).toString('hex');
-  store.set(id, { type, expiresAt: Date.now() + ttlMs });
+  store.set(id, { type, expiresAt: Date.now() + ttlMs, scope });
   return id;
 }
 

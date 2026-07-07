@@ -31,7 +31,9 @@ router.post('/share', (req, res) => {
   if (!link || Date.now() > link.expiresAt) {
     return res.status(410).json({ success: false, error: 'Link wygasł' });
   }
-  const id = sessions.create('share', link.expiresAt - Date.now());
+  const id = sessions.create('share', link.expiresAt - Date.now(), {
+    channel: link.channel, startTime: link.startTime, endTime: link.endTime, filePath: link.filePath,
+  });
   res.cookie('vp_session', id, { ...COOKIE_OPTS, expires: new Date(link.expiresAt) });
   res.json({ success: true });
 });
