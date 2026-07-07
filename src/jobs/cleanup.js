@@ -1,7 +1,8 @@
 'use strict';
-const shareStore  = require('../services/shareStore');
-const streamStore = require('../services/streamStore');
-const go2rtc      = require('../services/go2rtcApi');
+const shareStore   = require('../services/shareStore');
+const streamStore  = require('../services/streamStore');
+const sessionStore = require('../services/sessionStore');
+const go2rtc       = require('../services/go2rtcApi');
 
 const SHARE_TTL       = 0;               // expiry tracked in link itself
 const STREAM_MEM_TTL  = 2 * 60 * 60 * 1000; // 2h — usuń z pamięci po zakończeniu
@@ -14,6 +15,8 @@ function startCleanupJob() {
     shareStore.forEach((link, token) => {
       if (now > link.expiresAt) shareStore.delete(token);
     });
+
+    sessionStore.cleanup();
 
     for (const [token, job] of streamStore) {
       if (job.endedAt) {
