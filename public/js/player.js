@@ -63,7 +63,6 @@ export async function showPlayer(token, file, { keepSeekbar = false } = {}) {
   v.style.display = 'block';
   v.oncanplay = null; v.onplaying = null; v.onwaiting = null; v.onstalled = null; v.onerror = null;
 
-  if (state.currentMSEController) { state.currentMSEController.abort(); state.currentMSEController = null; }
   if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
 
   const pc = new RTCPeerConnection({
@@ -174,7 +173,6 @@ export async function stopStream(silent = false) {
 
   destroySeekbar();
   stopHeartbeat();
-  if (state.currentMSEController) { state.currentMSEController.abort(); state.currentMSEController = null; }
   if (state.currentRTCPeer) { state.currentRTCPeer.close(); state.currentRTCPeer = null; }
 
   const v = videoEl();

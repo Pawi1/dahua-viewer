@@ -3,7 +3,6 @@ export const state = {
   currentFile:          null,
   currentChannel:       1,
   currentRTCPeer:       null,
-  currentMSEController: null,
   searchResults:        [],
   heartbeatInterval:    null,
   currentResolution:    '480p',
