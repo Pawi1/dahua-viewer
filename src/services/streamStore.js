@@ -1,10 +1,6 @@
 'use strict';
-const fs = require('fs');
-const cfg = require('../config');
 
-fs.mkdirSync(cfg.tmpDir, { recursive: true });
-
-// token → { ff, outFile, startedAt, endedAt, logDesc }
+// token → { rtspUrl, startedAt, endedAt, logDesc, lastHeartbeat }
 const store = new Map();
 
 module.exports = store;
