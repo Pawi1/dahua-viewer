@@ -6,6 +6,7 @@ const streamStore = require('../services/streamStore');
 const go2rtc = require('../services/go2rtcApi');
 const { genToken } = require('../utils/tokens');
 const { toRtspTime } = require('../utils/dahua');
+const { sanitizeNvrPath } = require('../utils/files');
 
 const router = Router();
 
@@ -24,7 +25,8 @@ router.post('/start', async (req, res) => {
     go2rtcSrc = `ffmpeg:${rtspUrl}#video=${profile}#hardware`;
     logDesc = `ch${channel} ${st}→${et}`;
   } else if (filePath) {
-    const safePath = filePath.replace(/\.\./g, '');
+    const safePath = sanitizeNvrPath(filePath);
+    if (!safePath) return res.status(400).json({ success: false, error: 'Nieprawidłowa ścieżka pliku' });
     rtspUrl = `http://${cfg.nvrUser}:${encodeURIComponent(cfg.nvrPass)}@${cfg.nvrHost}:${cfg.nvrPort}/cgi-bin/RPC_Loadfile${safePath}`;
     go2rtcSrc = `ffmpeg:${rtspUrl}#video=${profile}#hardware`;
     logDesc = safePath;

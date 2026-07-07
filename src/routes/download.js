@@ -2,6 +2,7 @@
 const { Router } = require('express');
 const path = require('path');
 const dApi = require('../services/dahuaApi');
+const { sanitizeNvrPath } = require('../utils/files');
 
 const router = Router();
 
@@ -11,7 +12,8 @@ router.get('/', async (req, res) => {
   let downloadPath, filename;
 
   if (fp && !sample) {
-    const safePath = fp.replace(/\.\./g, '');
+    const safePath = sanitizeNvrPath(fp);
+    if (!safePath) return res.status(400).json({ error: 'Nieprawidłowa ścieżka pliku' });
     downloadPath = `/cgi-bin/RPC_Loadfile${safePath}`;
     filename     = path.basename(safePath) || 'recording.dav';
   } else {
