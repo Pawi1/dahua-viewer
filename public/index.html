@@ -36,7 +36,7 @@
     <div class="header-right">
       <div class="header-time" id="clockDisplay">--:--:--</div>
       <a href="/converter.html" class="btn btn-ghost btn-sm" style="font-size:11px; text-decoration:none;">Konwerter DAV</a>
-      <button class="btn btn-ghost btn-sm" onclick="logout()" style="font-size:11px">Wyloguj</button>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn" style="font-size:11px">Wyloguj</button>
     </div>
   </header>
 
@@ -72,13 +72,13 @@
       </div>
 
       <div class="search-btn-row">
-        <button class="btn btn-primary" onclick="searchRecordings()">
+        <button class="btn btn-primary" id="searchBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M6.5 12a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11zm4.89-1.44 3.05 3.06-.71.71-3.06-3.05a7 7 0 1 1 .72-.72z"/>
           </svg>
           Szukaj
         </button>
-        <button class="btn btn-icon" onclick="resetSearch()" title="Wyczyść wyniki">
+        <button class="btn btn-icon" id="resetSearchBtn" title="Wyczyść wyniki">
           <svg viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.5 9.1L10.1 11.5 8 9.4l-2.1 2.1-1.4-1.4L6.6 8 4.5 5.9l1.4-1.4L8 6.6l2.1-2.1 1.4 1.4L9.4 8l2.1 2.1z"/>
           </svg>
@@ -93,11 +93,11 @@
         <input type="datetime-local" id="playFromTime" step="1">
       </div>
       <div class="search-btn-row">
-        <button class="btn btn-primary" style="flex:1" onclick="playAtTime()">
+        <button class="btn btn-primary" style="flex:1" id="playAtTimeBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 6-10 6V2z"/></svg>
           Od czasu
         </button>
-        <button class="btn btn-danger" style="flex:1" onclick="playLive()">
+        <button class="btn btn-danger" style="flex:1" id="playLiveBtn">
           <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><circle cx="5" cy="5" r="5"/></svg>
           Na żywo
         </button>
@@ -177,11 +177,11 @@
         </div>
       </div>
       <div class="fragment-actions">
-        <button class="btn btn-primary btn-sm" onclick="downloadFragment()">
+        <button class="btn btn-primary btn-sm" id="downloadFragmentBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v8.59l2.3-2.3 1.4 1.42L8 12.41 4.3 8.71l1.4-1.42L8 9.59V1h2zm-6 12h12v2H2v-2z"/></svg>
           Pobierz fragment
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="closeFragmentPanel()">Anuluj</button>
+        <button class="btn btn-ghost btn-sm" id="cancelFragmentBtn">Anuluj</button>
       </div>
     </div>
 
@@ -191,32 +191,32 @@
         <div class="player-info-sub" id="playerSub">—</div>
       </div>
       <div class="toolbar-actions">
-        <select id="resolutionSelect" class="res-select" onchange="changeResolution(this.value)">
+        <select id="resolutionSelect" class="res-select">
           <option value="480p">480p</option>
           <option value="720p">720p</option>
           <option value="1080p">1080p</option>
           <option value="native">Oryginalna</option>
         </select>
         <div class="toolbar-divider"></div>
-        <button class="btn btn-ghost btn-sm" onclick="downloadCurrent()">
+        <button class="btn btn-ghost btn-sm" id="downloadCurrentBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1v8.59l2.3-2.3 1.4 1.42L8 12.41 4.3 8.71l1.4-1.42L8 9.59V1h2zm-6 12h12v2H2v-2z"/>
           </svg>
           Całe
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="openFragmentPanel()">
+        <button class="btn btn-ghost btn-sm" id="openFragmentBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 2h4v12H2zm8 0h4v12h-4zM6 6h4v4H6z"/>
           </svg>
           Fragment
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="openShareModal()">
+        <button class="btn btn-ghost btn-sm" id="openShareBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M12 9a3 3 0 0 0-2.4 1.2L6.4 8.4A3 3 0 0 0 6.4 7.6l3.2-1.8A3 3 0 1 0 9 4a3 3 0 0 0 .4 1.4L6.2 7.2A3 3 0 1 0 4 11a3 3 0 0 0 1.8-.6l3.4 1.9A3 3 0 1 0 12 9z"/>
           </svg>
           Udostępnij
         </button>
-        <button class="btn btn-danger btn-sm" onclick="stopStream()">
+        <button class="btn btn-danger btn-sm" id="stopStreamBtn">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 2h5v12H2zm7 0h5v12H9z"/>
           </svg>
@@ -232,7 +232,7 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Udostępnij nagranie</span>
-      <button class="modal-close" onclick="closeShareModal()">✕</button>
+      <button class="modal-close" id="shareModalCloseBtn">✕</button>
     </div>
 
     <div class="field">
@@ -248,7 +248,7 @@
 
     <div class="share-url-box" id="shareUrlBox" style="display:none">
       <input type="text" id="shareUrlInput" readonly>
-      <button class="btn btn-ghost btn-sm" onclick="copyShareUrl()">Kopiuj</button>
+      <button class="btn btn-ghost btn-sm" id="copyShareUrlBtn">Kopiuj</button>
     </div>
 
     <div class="share-info" id="shareInfo" style="margin-bottom:16px">
@@ -257,8 +257,8 @@
     </div>
 
     <div style="display:flex; gap:8px; justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="closeShareModal()">Anuluj</button>
-      <button class="btn btn-primary btn-sm" onclick="generateShareLink()">Generuj link</button>
+      <button class="btn btn-ghost btn-sm" id="shareModalCancelBtn">Anuluj</button>
+      <button class="btn btn-primary btn-sm" id="generateShareLinkBtn">Generuj link</button>
     </div>
   </div>
 </div>

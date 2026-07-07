@@ -37,14 +37,33 @@ function startGo2rtc() {
 
 function createApp() {
   const app = express();
+  // Required for req.secure to reflect X-Forwarded-Proto when run behind
+  // the reverse proxy the README recommends for TLS termination.
+  app.set('trust proxy', 1);
   app.use(cookieParser());
   app.use(express.json());
   app.use(csrfGuard);
-  // CSP disabled: the UI relies on onclick="..." attributes and an inline
-  // module script in converter.html — matching CSP to that would need a
-  // separate frontend refactor. The rest of helmet's headers (HSTS,
-  // X-Frame-Options, nosniff, referrer-policy...) work with no UI changes.
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        // ffmpeg.wasm compiles WebAssembly and runs its encoder in a worker.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
+        workerSrc: ["'self'", 'blob:'],
+        // Inline onclick/onchange attributes were removed app-wide; keep
+        // this locked down as a guardrail against reintroducing them.
+        scriptSrcAttr: ["'none'"],
+        // Inline style="..." attributes and the two inline <style> blocks
+        // (index.html/converter.html) are still used — refactoring those
+        // out is a separate, much larger change than the scripting side.
+        styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+        fontSrc: ["'self'", 'https:', 'data:'],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'", 'stun:stun.l.google.com:19302'],
+        objectSrc: ["'none'"],
+      },
+    },
+  }));
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
   app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));

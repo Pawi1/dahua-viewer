@@ -43,20 +43,31 @@ test('static files are served from public/', async () => {
   });
 });
 
-test('security headers (helmet) are present', async () => {
+test('security headers (helmet) are present, including a real CSP', async () => {
   await withApp(async (baseUrl) => {
     const r = await fetch(`${baseUrl}/api/config`);
     assert.equal(r.headers.get('x-frame-options'), 'SAMEORIGIN');
     assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
-    assert.equal(r.headers.get('content-security-policy'), null);
+
+    const csp = r.headers.get('content-security-policy');
+    assert.ok(csp);
+    assert.match(csp, /script-src 'self' 'wasm-unsafe-eval'/);
+    assert.match(csp, /script-src-attr 'none'/);
+    assert.match(csp, /object-src 'none'/);
   });
 });
 
 test('protected API routes are mounted behind authMiddleware (401 without a session)', async () => {
   await withApp(async (baseUrl) => {
+    // GET first to pick up the csrfToken cookie, so these POSTs get past the
+    // CSRF layer and actually exercise the auth layer underneath it.
+    const first = await fetch(`${baseUrl}/api/config`);
+    const csrfToken = (first.headers.get('set-cookie') || '').match(/csrfToken=([^;]+)/)[1];
+    const headers = { cookie: `csrfToken=${csrfToken}`, 'x-csrf-token': csrfToken };
+
     const paths = ['/api/search', '/api/stream/start', '/api/download', '/api/nvr/info', '/api/share'];
     for (const p of paths) {
-      const r = await fetch(`${baseUrl}${p}`, { method: p === '/api/nvr/info' ? 'GET' : 'POST' });
+      const r = await fetch(`${baseUrl}${p}`, { method: p === '/api/nvr/info' ? 'GET' : 'POST', headers });
       assert.equal(r.status, 401, `expected 401 for ${p}`);
     }
   });

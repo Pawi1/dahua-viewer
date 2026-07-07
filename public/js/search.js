@@ -66,7 +66,7 @@ export function renderResults(found, files) {
     ).join('');
 
     html += `
-      <div class="file-card" id="card-${idx}" onclick="selectFile(${idx})">
+      <div class="file-card" id="card-${idx}" data-idx="${idx}">
         <div class="file-card-time">
           <span>${escHtml(formatTime(f.startTime))}</span> → ${escHtml(formatTime(f.endTime))}
         </div>
@@ -75,14 +75,31 @@ export function renderResults(found, files) {
           ${eventsHtml}
           <span>${dur}${size}</span>
         </div>
-        <div class="file-card-actions" onclick="event.stopPropagation()">
-          <button class="btn btn-ghost btn-sm" onclick="playFile(${idx})">▶ Odtwórz</button>
-          <button class="btn btn-ghost btn-sm" onclick="downloadFile(${idx})">↓ Pobierz</button>
+        <div class="file-card-actions">
+          <button class="btn btn-ghost btn-sm" data-action="play">▶ Odtwórz</button>
+          <button class="btn btn-ghost btn-sm" data-action="download">↓ Pobierz</button>
         </div>
       </div>`;
   });
 
   listEl.innerHTML = html;
+}
+
+// Attached once — #resultsList itself is never replaced, only its children
+// are re-rendered on each search, so a single delegated listener covers
+// every card/button that ever gets rendered into it.
+export function initResultsListEvents() {
+  document.getElementById('resultsList').addEventListener('click', (e) => {
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn) {
+      const idx = Number(actionBtn.closest('.file-card').dataset.idx);
+      if (actionBtn.dataset.action === 'play') playFile(idx);
+      else if (actionBtn.dataset.action === 'download') downloadFile(idx);
+      return;
+    }
+    const card = e.target.closest('.file-card');
+    if (card) selectFile(Number(card.dataset.idx));
+  });
 }
 
 export async function selectFile(idx) {
