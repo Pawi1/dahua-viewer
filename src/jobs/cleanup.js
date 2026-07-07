@@ -4,9 +4,8 @@ const streamStore  = require('../services/streamStore');
 const sessionStore = require('../services/sessionStore');
 const go2rtc       = require('../services/go2rtcApi');
 
-const SHARE_TTL       = 0;               // expiry tracked in link itself
-const STREAM_MEM_TTL  = 2 * 60 * 60 * 1000; // 2h — usuń z pamięci po zakończeniu
-const HEARTBEAT_TTL   = 60 * 1000;           // 60s bez pingu → ubij stream
+const STREAM_MEM_TTL  = 2 * 60 * 60 * 1000; // 2h — drop from memory after the stream ends
+const HEARTBEAT_TTL   = 60 * 1000;          // 60s without a ping -> kill the stream
 
 function startCleanupJob() {
   setInterval(async () => {
@@ -26,7 +25,7 @@ function startCleanupJob() {
 
       const lastPing = job.lastHeartbeat || job.startedAt;
       if (now - lastPing > HEARTBEAT_TTL) {
-        console.log(`[gc] stale stream ${token} — brak pingu od ${Math.round((now - lastPing) / 1000)}s, ubijam`);
+        console.log(`[gc] stale stream ${token} — no ping for ${Math.round((now - lastPing) / 1000)}s, killing it`);
         await go2rtc.deleteStream(token);
         job.endedAt = now;
       }

@@ -2,10 +2,10 @@
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Odrzuca żądania zmieniające stan, które przeglądarka oznaczyła jako
-// cross-site (Fetch Metadata) albo których Origin nie zgadza się z hostem
-// aplikacji. Uzupełnia sameSite=lax na ciasteczku sesji — ten sam mechanizm
-// bez potrzeby trzymania osobnego tokena CSRF.
+// Rejects state-changing requests that the browser marked as cross-site
+// (Fetch Metadata) or whose Origin doesn't match the app's own host.
+// Complements sameSite=lax on the session cookie — same protection goal
+// without maintaining a separate CSRF token.
 module.exports = function csrfGuard(req, res, next) {
   if (!UNSAFE_METHODS.has(req.method)) return next();
 

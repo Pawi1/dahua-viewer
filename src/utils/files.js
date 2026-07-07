@@ -1,10 +1,10 @@
 'use strict';
 const fs = require('fs');
 
-// Nagrania na NVR-ze zawsze leżą pod /mnt/<dysk>/... (patrz Dahua mediaFileFind
-// FilePath, np. "/mnt/dvr/sda0/2010/8/11/dav/15:40:50.jpg"). Zamiast wycinać ".."
-// (co nie blokuje ścieżek bezwzględnych spoza tego katalogu), wymagamy zgodności
-// z tym wzorcem w całości i odrzucamy wszystko inne.
+// Recordings on the NVR always live under /mnt/<disk>/... (see Dahua
+// mediaFileFind's FilePath, e.g. "/mnt/dvr/sda0/2010/8/11/dav/15:40:50.jpg").
+// Instead of stripping ".." (which doesn't block absolute paths outside that
+// directory), require the whole path to match this shape and reject anything else.
 const SAFE_NVR_PATH = /^\/mnt\/[\w\-./:[\]@]+$/;
 
 function sanitizeNvrPath(filePath) {

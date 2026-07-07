@@ -26,7 +26,7 @@ export function openFragmentPanel() {
 
   setInputs(fragStart, fragEnd);
 
-  // Synchronizuj seekbar → inputy
+  // Seekbar drag -> update the input fields
   enterFragmentMode(
     (fragStart - recStart) / duration,
     (fragEnd   - recStart) / duration,
@@ -38,7 +38,7 @@ export function openFragmentPanel() {
     }
   );
 
-  // Synchronizuj inputy → seekbar
+  // Typing in the input fields -> update the seekbar
   const onInput = () => {
     const sv = document.getElementById('fragStart').value;
     const ev = document.getElementById('fragEnd').value;

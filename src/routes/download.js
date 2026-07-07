@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
     const sampleSec = sample ? parseInt(sample, 10) : null;
     let effectiveEnd = endTime;
     if (sampleSec) {
-      // Parse "YYYY-MM-DD HH:MM:SS" i dodaj sekundy bez konwersji strefy
+      // Parse "YYYY-MM-DD HH:MM:SS" and add seconds without any timezone conversion
       const [datePart, timePart] = startTime.split(' ');
       const [h, m, s] = timePart.split(':').map(Number);
       const total = h * 3600 + m * 60 + s + sampleSec;

@@ -563,7 +563,7 @@ main { grid-area: main; display: flex; flex-direction: column; overflow: hidden;
 }
 .login-error.hidden { display: none; }
 
-/* Share mode — ukryj sidebar */
+/* Share mode — hide sidebar */
 body.share-mode .sidebar { display: none; }
 body.share-mode .app {
   grid-template-columns: 1fr;

@@ -30,8 +30,8 @@ function startGo2rtc() {
   const proc = spawn(bin, ['-config', cfgStreams], { stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
   proc.stderr.on('data', d => process.stdout.write(`[go2rtc] ${d}`));
-  proc.on('close', code => console.log(`[go2rtc] zakończył (kod: ${code})`));
-  proc.on('error', err  => console.error(`[go2rtc] błąd startu:`, err.message));
+  proc.on('close', code => console.log(`[go2rtc] exited (code: ${code})`));
+  proc.on('error', err  => console.error(`[go2rtc] failed to start:`, err.message));
   return proc;
 }
 startGo2rtc();
@@ -40,10 +40,10 @@ const app = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(csrfGuard);
-// CSP wyłączone: UI opiera się na atrybutach onclick="..." i module scriptcie
-// inline w converter.html — dopasowanie CSP do tego wymagałoby osobnego
-// refaktoru frontendu. Reszta nagłówków helmeta (HSTS, X-Frame-Options,
-// nosniff, referrer-policy...) działa bez zmian w UI.
+// CSP disabled: the UI relies on onclick="..." attributes and an inline
+// module script in converter.html — matching CSP to that would need a
+// separate frontend refactor. The rest of helmet's headers (HSTS,
+// X-Frame-Options, nosniff, referrer-policy...) work with no UI changes.
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
@@ -64,5 +64,5 @@ app.use('/api/share',    shareApi);
 startCleanupJob();
 
 app.listen(cfg.port, () => {
-  console.log(`Dahua NVR Web Viewer → http://localhost:${cfg.port}  |  NVR: ${cfg.nvrHost}:${cfg.nvrPort}  |  user: ${cfg.nvrUser}  |  kanały: ${cfg.channels}`);
+  console.log(`Dahua NVR Web Viewer → http://localhost:${cfg.port}  |  NVR: ${cfg.nvrHost}:${cfg.nvrPort}  |  user: ${cfg.nvrUser}  |  channels: ${cfg.channels}`);
 });

@@ -3,10 +3,10 @@ const sessions = require('../services/sessionStore');
 
 const PUBLIC = ['/api/auth/', '/api/config'];
 
-// Share-sesje mogą dotykać wyłącznie tych prefiksów — bez wyszukiwarki
+// Share sessions may only touch these prefixes — no search
 const SHARE_ALLOWED_PREFIXES = ['/api/stream/', '/api/download', '/api/nvr/'];
 
-// Endpointy, gdzie parametry żądania muszą mieścić się w zakresie przyznanym share-linkowi
+// Endpoints where the request params must fall within the scope granted to the share link
 const SHARE_SCOPED_PREFIXES = ['/api/stream/start', '/api/download'];
 
 function withinShareScope(scope, req) {

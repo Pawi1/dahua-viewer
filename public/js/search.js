@@ -192,7 +192,7 @@ export async function playAtTime() {
 export async function playLive() {
   const channel = parseInt(document.getElementById('channelSelect').value) || 1;
 
-  // Użyj czasu NVR — może różnić się od czasu przeglądarki/serwera
+  // Use the NVR's own clock — it may differ from the browser's/server's
   let nvrNow = new Date();
   try {
     const tr = await fetch('/api/nvr/time');
