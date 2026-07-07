@@ -15,6 +15,7 @@ const nvr      = require('./src/routes/nvr');
 const { apiRouter: shareApi, pageRouter: sharePage } = require('./src/routes/share');
 const startCleanupJob = require('./src/jobs/cleanup');
 const authMiddleware  = require('./src/middleware/auth');
+const csrfGuard       = require('./src/middleware/csrf');
 
 function startGo2rtc() {
   const candidates = [process.env.GO2RTC_BIN, '/usr/local/bin/go2rtc', '/usr/bin/go2rtc', '/bin/go2rtc'].filter(Boolean);
@@ -37,6 +38,7 @@ startGo2rtc();
 const app = express();
 app.use(cookieParser());
 app.use(express.json());
+app.use(csrfGuard);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/ffmpeg/ffmpeg', express.static(path.join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')));
 app.use('/ffmpeg/core',   express.static(path.join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')));
