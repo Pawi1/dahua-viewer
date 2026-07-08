@@ -98,10 +98,11 @@ go2rtc is launched as a child process of Node.js and configured via `go2rtc.yaml
 
 ### NVR
 
-| Method | Path               | Description                        |
-|--------|--------------------|------------------------------------|
-| GET    | `/api/nvr/info`    | NVR system info (model, firmware)  |
-| GET    | `/api/nvr/channels`| Number of available channels       |
+| Method | Path               | Description                                      |
+|--------|--------------------|---------------------------------------------------|
+| GET    | `/api/nvr/info`    | NVR system info (model, firmware)                |
+| GET    | `/api/nvr/time`    | Current NVR time, used to sync live-view playback |
+| GET    | `/api/nvr/channels`| Number of available channels                     |
 
 ### Search
 
@@ -172,3 +173,35 @@ The application uses session cookies (`httpOnly`, `sameSite=lax`) validated agai
 For production, place behind a reverse proxy (nginx/Caddy) with TLS. go2rtc's API is bound to `127.0.0.1` only and is not exposed externally.
 
 Sessions and share links are stored in memory — a server restart clears them.
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## Testing
+
+```bash
+npm test              # run the suite (node:test, no external test framework)
+npm run test:coverage # same, with coverage over src/ and server.js
+```
+
+128 tests, no real NVR or go2rtc instance required — `dahuaApi`/`go2rtcApi` are mocked per-test via `node:test`'s module mocking. Coverage includes:
+
+- **Routes** — auth, search, stream, download, nvr, share (request validation, status codes, session/CSRF interaction)
+- **Middleware** — CSRF guard, auth/session gate (incl. share-link scoping), digest-auth retry logic
+- **Services** — session/share/stream stores, the Dahua API client, the go2rtc API client
+- **Utils** — Dahua response parsing, NVR path sanitization, token generation
+- **server.js** — `createApp()` wiring, security headers, `startGo2rtc()` binary resolution
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — middleware/routing wiring, go2rtc lifecycle, session/share/stream stores, digest-auth flow
+- [docs/API.md](docs/API.md) — full API reference with request/response payloads
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — reverse proxy, TLS, process management, scaling limitations
+- [docs/wiki/Home.md](docs/wiki/Home.md) — end-user guide (setup, configuration, troubleshooting)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, testing, and PR expectations.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).
